@@ -1,6 +1,25 @@
 # Model credits
 
-The engine shown in the app is one CC0 model. Its textures are packed inside the same GLB. Nothing else is loaded.
+The engine on the page is built in code from primitives. It is original to this project. Roughness variation is drawn in a canvas at runtime. It is not a downloaded texture.
+
+Two external assets ship with the repo. Both are CC0.
+
+## Studio lighting
+
+| | |
+| --- | --- |
+| File | `public/hdri/studio_small_03_1k.hdr` |
+| What it is | 1K studio HDRI (about 1.7 MB) used for soft image-based highlights |
+| Source | [Studio Small 03 on Poly Haven](https://polyhaven.com/a/studio_small_03) |
+| Author | Greg Zaal |
+| License | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/legalcode) |
+| Downloaded | 2026-11-25 |
+
+The page also adds a few analytic lights and lightformers on top of this map. Those are code, not an asset.
+
+## Reference car engine
+
+This GLB is not loaded by the default view. It remains in the repo as a scale and style reference from milestone 2.
 
 ## Car engine
 
@@ -16,7 +35,7 @@ The engine shown in the app is one CC0 model. Its textures are packed inside the
 
 Grab3D's package says the mesh and textures were built with Blender scripts. Those scripts were written with an AI coding assistant. No generative model produced the geometry or textures. The same note is in the download's `LICENSE.txt`.
 
-The app footer still names Grab3D and links to the source page.
+The footer still names Grab3D, links to the source page, and says this file is not loaded.
 
 ## Textures
 

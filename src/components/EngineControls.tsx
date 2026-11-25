@@ -5,10 +5,11 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { bindOrbitKeys } from './orbitKeys.ts'
 import { usePrefersReducedMotion } from './usePrefersReducedMotion.ts'
 
-export function EngineControls() {
+export function EngineControls({ damping }: { damping?: boolean }) {
   const gl = useThree((state) => state.gl)
   const reducedMotion = usePrefersReducedMotion()
   const controls = useRef<OrbitControlsImpl>(null)
+  const damp = damping ?? !reducedMotion
 
   useEffect(() => {
     const orbit = controls.current
@@ -24,9 +25,10 @@ export function EngineControls() {
       ref={controls}
       domElement={gl.domElement}
       makeDefault
-      enableDamping={!reducedMotion}
+      enableDamping={damp}
       dampingFactor={0.08}
       enablePan
+      maxPolarAngle={Math.PI / 2 - 0.05}
     />
   )
 }

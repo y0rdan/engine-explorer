@@ -1,65 +1,80 @@
-import { useGLTF } from '@react-three/drei'
+import { AdaptiveDpr, ContactShadows, Environment, Lightformer } from '@react-three/drei'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Suspense, useEffect, useLayoutEffect, useMemo, useState } from 'react'
-import { PerspectiveCamera, type Object3D } from 'three'
+import { Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { ACESFilmicToneMapping, Plane, SRGBColorSpace, Vector3 } from 'three'
+import type { EngineRecord } from '../engine/schema.ts'
 import { CanvasErrorBoundary } from './CanvasErrorBoundary.tsx'
 import { EngineControls } from './EngineControls.tsx'
-import { frameModel, isOrbitControls } from './frameModel.ts'
+import { SCENE_LABEL } from './engineModel.ts'
+import { EngineViewProvider } from './inline4/chrome.tsx'
+import { Inline4Engine } from './inline4/Inline4Engine.tsx'
+import { SceneDriver, type DriverProps } from './SceneDriver.tsx'
 import {
-  MODEL_LOAD_ERROR,
-  MODEL_LOADING_MESSAGE,
-  SCENE_LABEL,
-  engineModelUrl,
-  preloadEngineModel,
-} from './engineModel.ts'
+  STUDIO_LOAD_ERROR,
+  STUDIO_LOADING_MESSAGE,
+  preloadStudioHdri,
+  studioHdriUrl,
+} from './studio.ts'
 
-const modelUrl = engineModelUrl()
+const hdriUrl = studioHdriUrl()
 
-function FrameModel({ object }: { object: Object3D }) {
-  const camera = useThree((state) => state.camera)
-  const size = useThree((state) => state.size)
-  const controls = useThree((state) => state.controls)
-  const invalidate = useThree((state) => state.invalidate)
-
-  useLayoutEffect(() => {
-    if (!(camera instanceof PerspectiveCamera)) return
-    frameModel(camera, isOrbitControls(controls) ? controls : null, object, size.width, size.height)
-    invalidate()
-  }, [object, camera, size, controls, invalidate])
-
-  return null
+function useLowPower(): boolean {
+  const [low, setLow] = useState(false)
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const media = window.matchMedia('(max-width: 899px), (pointer: coarse)')
+    const update = () => setLow(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+  return low
 }
 
-function EngineModel() {
-  const { scene } = useGLTF(modelUrl, false)
-  const model = useMemo(() => scene.clone(true), [scene])
-  return (
-    <>
-      <primitive object={model} />
-      <FrameModel object={model} />
-    </>
-  )
-}
-
-function ModelNotice({ message, alert }: { message: string; alert?: boolean }) {
-  return (
-    <p className="canvas-fallback" role={alert ? 'alert' : 'status'}>
-      <span className="model-status">{message}</span>
-    </p>
-  )
-}
-
-export function EngineCanvas() {
-  const [phase, setPhase] = useState<'loading' | 'ready' | 'failed'>('loading')
+export function EngineCanvas({
+  driverRef,
+  pokeRef,
+  engine,
+  partId,
+  layerId,
+  hoveredPartId,
+  isolated,
+  assemblyPartId,
+  cutaway,
+  onClear,
+  onSelectPart,
+  onSelectLayer,
+  onHover,
+}: {
+  driverRef: MutableRefObject<DriverProps>
+  pokeRef: MutableRefObject<() => void>
+  engine: EngineRecord
+  partId: string | null
+  layerId: string | null
+  hoveredPartId: string | null
+  isolated: boolean
+  assemblyPartId: string | null
+  cutaway: boolean
+  onClear: () => void
+  onSelectPart: (id: string) => void
+  onSelectLayer: (partId: string, layerId: string) => void
+  onHover: (id: string | null) => void
+}) {
+  const lowPower = useLowPower()
+  const [lighting, setLighting] = useState<'loading' | 'ready' | 'failed'>('loading')
+  const clipPlane = useMemo(() => new Plane(new Vector3(0, 0, -1), 0.02), [])
+  const down = useRef({ x: 0, y: 0 })
+  const selected = engine.parts.find((part) => part.id === partId)
+  const label = selected ? `${SCENE_LABEL}. ${selected.displayName} selected.` : SCENE_LABEL
 
   useEffect(() => {
     let active = true
-    preloadEngineModel(modelUrl)
+    preloadStudioHdri(hdriUrl)
       .then(() => {
-        if (active) setPhase('ready')
+        if (active) setLighting('ready')
       })
       .catch(() => {
-        if (active) setPhase('failed')
+        if (active) setLighting('failed')
       })
     return () => {
       active = false
@@ -69,33 +84,117 @@ export function EngineCanvas() {
   return (
     <CanvasErrorBoundary>
       <Canvas
-        camera={{ position: [2.6, 1.7, 2.6], fov: 42, near: 0.01, far: 50 }}
-        dpr={[1, 1.75]}
-        fallback={<span>{SCENE_LABEL}</span>}
+        camera={{ position: [-1.28, 0.82, 1.08], fov: 32, near: 0.02, far: 40 }}
+        dpr={lowPower ? [1, 1.25] : [1, 1.75]}
         frameloop="demand"
-        gl={{ antialias: true }}
-        style={{ position: 'absolute', inset: 0, touchAction: 'none' }}
-        onCreated={({ gl }) => {
+        gl={{
+          antialias: !lowPower,
+          alpha: true,
+          toneMapping: ACESFilmicToneMapping,
+          outputColorSpace: SRGBColorSpace,
+          powerPreference: lowPower ? 'low-power' : 'high-performance',
+        }}
+        style={{ position: 'absolute', inset: 0, touchAction: 'none', background: 'transparent' }}
+        onPointerDown={(event) => {
+          down.current = { x: event.clientX, y: event.clientY }
+        }}
+        onPointerMissed={(event) => {
+          const dx = event.clientX - down.current.x
+          const dy = event.clientY - down.current.y
+          if (dx * dx + dy * dy > 25) return
+          onClear()
+        }}
+        onCreated={({ gl, scene }) => {
+          gl.toneMapping = ACESFilmicToneMapping
+          gl.toneMappingExposure = 0.96
+          gl.outputColorSpace = SRGBColorSpace
+          gl.localClippingEnabled = true
+          gl.setClearColor(0x000000, 0)
+          scene.background = null
           const canvas = gl.domElement
           canvas.tabIndex = 0
           canvas.setAttribute('role', 'img')
           canvas.setAttribute('aria-label', SCENE_LABEL)
         }}
       >
-        <color attach="background" args={['#101418']} />
-        <ambientLight intensity={0.62} />
-        <hemisphereLight args={['#f7f4ee', '#243038', 0.5]} />
-        <directionalLight position={[4.5, 6, 3]} intensity={2.1} />
-        <directionalLight position={[-3.5, 2.2, -2.5]} intensity={0.55} />
-        <EngineControls />
-        {phase === 'ready' && (
+        {!lowPower && <AdaptiveDpr />}
+        <CanvasAria label={label} />
+        <hemisphereLight args={['#f5f7fb', '#121416', 0.32]} />
+        <directionalLight position={[0.4, 5.6, 1.1]} intensity={1.7} color="#fff4e8" />
+        <directionalLight position={[-3.1, 2.1, 2.8]} intensity={0.72} color="#d5e4f4" />
+        <directionalLight position={[2.6, 1.4, -2.4]} intensity={0.4} color="#fffaf4" />
+        {lighting !== 'failed' && (
           <Suspense fallback={null}>
-            <EngineModel />
+            <Environment files={hdriUrl} environmentIntensity={0.72} resolution={lowPower ? 128 : 256} frames={1}>
+              <Lightformer
+                form="rect"
+                intensity={3}
+                color="#fff3e6"
+                position={[0, 3.2, 0.35]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                scale={[4.2, 2.6, 1]}
+              />
+              <Lightformer
+                form="rect"
+                intensity={0.85}
+                color="#d7e3f2"
+                position={[-2.2, 1.4, 2.1]}
+                scale={[2, 1.3, 1]}
+              />
+            </Environment>
           </Suspense>
         )}
+        <EngineControls />
+        <SceneDriver driverRef={driverRef} pokeRef={pokeRef} />
+        <EngineViewProvider
+          value={{
+            partId,
+            layerId,
+            hoveredPartId,
+            isolated,
+            assemblyPartId,
+            cutaway,
+            clipPlane,
+            selectPart: onSelectPart,
+            selectLayer: onSelectLayer,
+            hoverPart: onHover,
+          }}
+        >
+          <Inline4Engine engine={engine} />
+        </EngineViewProvider>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+          <circleGeometry args={[0.95, 64]} />
+          <meshBasicMaterial color="#050505" />
+        </mesh>
+        <ContactShadows
+          position={[0, 0.032, 0]}
+          opacity={0.5}
+          scale={3}
+          blur={2.2}
+          far={0.7}
+          resolution={lowPower ? 256 : 512}
+          frames={lowPower ? 1 : 24}
+          color="#000"
+        />
       </Canvas>
-      {phase === 'loading' && <ModelNotice message={MODEL_LOADING_MESSAGE} />}
-      {phase === 'failed' && <ModelNotice alert message={MODEL_LOAD_ERROR} />}
+      {lighting === 'loading' && (
+        <p className="lighting-status" role="status">
+          {STUDIO_LOADING_MESSAGE}
+        </p>
+      )}
+      {lighting === 'failed' && (
+        <p className="lighting-status" role="alert">
+          {STUDIO_LOAD_ERROR}
+        </p>
+      )}
     </CanvasErrorBoundary>
   )
+}
+
+function CanvasAria({ label }: { label: string }) {
+  const gl = useThree((state) => state.gl)
+  useEffect(() => {
+    gl.domElement.setAttribute('aria-label', label)
+  }, [gl, label])
+  return null
 }

@@ -8,6 +8,7 @@ import { EngineControls } from './EngineControls.tsx'
 import { SCENE_LABEL } from './engineModel.ts'
 import { EngineViewProvider } from './inline4/chrome.tsx'
 import { Inline4Engine } from './inline4/Inline4Engine.tsx'
+import { VeeEngine } from './vee/VeeEngine.tsx'
 import { SceneDriver, type DriverProps } from './SceneDriver.tsx'
 import {
   STUDIO_LOAD_ERROR,
@@ -17,6 +18,13 @@ import {
 } from './studio.ts'
 
 const hdriUrl = studioHdriUrl()
+
+function EngineModel({ engine }: { engine: EngineRecord }) {
+  if (engine.source.kind === 'procedural' && (engine.source.template === 'v6' || engine.source.template === 'v8')) {
+    return <VeeEngine engine={engine} />
+  }
+  return <Inline4Engine engine={engine} />
+}
 
 function useLowPower(): boolean {
   const [low, setLow] = useState(false)
@@ -160,10 +168,10 @@ export function EngineCanvas({
             hoverPart: onHover,
           }}
         >
-          <Inline4Engine engine={engine} />
+          <EngineModel engine={engine} />
         </EngineViewProvider>
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
-          <circleGeometry args={[0.95, 64]} />
+          <circleGeometry args={[1.25, 64]} />
           <meshBasicMaterial color="#050505" />
         </mesh>
         <ContactShadows

@@ -1,0 +1,117 @@
+.engine-picker {
+  height: 100%;
+  overflow: auto;
+  padding: 1.25rem max(1rem, env(safe-area-inset-right)) 2rem max(1rem, env(safe-area-inset-left));
+  background: #101418;
+}
+
+.engine-picker-head h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+}
+
+.engine-picker-head p {
+  margin: 0.4rem 0 0;
+  max-width: 40rem;
+  color: #a8b0aa;
+}
+
+.engine-picker-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 1rem 0;
+}
+
+.engine-search input {
+  width: min(24rem, 100%);
+  border: 1px solid #2a3338;
+  border-radius: 0.5rem;
+  background: #171d21;
+  color: #f2f0ea;
+  font: 0.95rem/1.2 system-ui, sans-serif;
+  padding: 0.55rem 0.7rem;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  border: 1px solid #2a3338;
+  border-radius: 999px;
+  background: #171d21;
+  color: #d5dbd6;
+  font: 600 0.8rem/1 system-ui, sans-serif;
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+}
+
+.chip[aria-pressed='true'] {
+  background: #d4843c;
+  border-color: #d4843c;
+  color: #171d21;
+}
+
+.chip:focus-visible,
+.engine-card:focus-visible,
+.engine-search input:focus-visible {
+  outline: 2px solid #e0a15a;
+  outline-offset: 2px;
+}
+
+.engine-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.9rem;
+}
+
+.engine-card {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  text-align: left;
+  border: 1px solid #2a3338;
+  border-radius: 0.75rem;
+  background: #171d21;
+  color: #f2f0ea;
+  padding: 0.8rem;
+  cursor: pointer;
+}
+
+.engine-card strong {
+  font-size: 1.05rem;
+}
+
+.engine-card span {
+  color: #a8b0aa;
+  font-size: 0.85rem;
+}
+
+.engine-badge {
+  display: inline-block;
+  border-radius: 999px;
+  background: #2a3338;
+  color: #f2f0ea !important;
+  padding: 0.15rem 0.5rem;
+  font-weight: 600;
+}
+
+.engine-mark {
+  width: 100%;
+  height: 5.5rem;
+  background: radial-gradient(ellipse at center, #3c4248 0%, #14181c 70%);
+  border-radius: 0.5rem;
+}
+
+.engine-empty {
+  color: #a8b0aa;
+}

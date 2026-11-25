@@ -10,6 +10,33 @@ export const genericInline4Data = {
   yearRange: { start: 2000, end: null },
   layout: 'inline-4',
   displacementCc: 1998,
+  category: 'engine',
+  specs: [
+    { label: 'Cylinders', value: '4', unit: 'in a row' },
+    { label: 'Bore', value: '86', unit: 'mm' },
+    { label: 'Stroke', value: '86', unit: 'mm' },
+    { label: 'Valvetrain', value: 'SOHC' },
+    { label: 'Firing order', value: '1-3-4-2' },
+  ],
+  source: {
+    kind: 'procedural',
+    template: 'inline-4',
+    params: {
+      bankAngleDeg: 0,
+      bore: 0.086,
+      stroke: 0.086,
+      cylindersPerBank: 4,
+      banks: 1,
+      dohc: false,
+      firingOrder: '1-3-4-2',
+    },
+  },
+  fastenerLayout: {
+    cylinders: 4,
+    banks: 1,
+    heads: 1,
+    valvetrain: 'sohc',
+  },
   parameters: {
     boreSpacing: 0.096,
     block: { length: 0.46, width: 0.2, height: 0.3 },

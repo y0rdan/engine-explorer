@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { defaultEngine } from '../data/engines/catalog.ts'
 import { activeStepIndex, assemblySteps } from '../engine/placement.ts'
-import { partById } from '../engine/schema.ts'
+import { partById, type EngineRecord } from '../engine/schema.ts'
 import { RPM_DEFAULT } from '../engine/kinematics.ts'
 import {
   assemblyDuration,
@@ -24,8 +23,7 @@ function initialView(engineParts: { id: string }[]): ViewState {
   return createView(valid)
 }
 
-export function EngineExperience() {
-  const engine = defaultEngine
+export function EngineExperience({ engine }: { engine: EngineRecord }) {
   const reducedMotion = usePrefersReducedMotion()
   const runtime = useRef(createRuntime())
   const pokeRef = useRef<() => void>(() => {})

@@ -1,0 +1,35 @@
+.header-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.engine-switcher {
+  display: inline-flex;
+  border: 1px solid #2a3338;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #101418;
+}
+
+.engine-switcher button {
+  border: 0;
+  background: transparent;
+  color: #a8b0aa;
+  font: 600 0.75rem/1 system-ui, sans-serif;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+}
+
+.engine-switcher button[aria-pressed='true'] {
+  background: #d4843c;
+  color: #171d21;
+}
+
+.engine-switcher button:focus-visible {
+  outline: 2px solid #e0a15a;
+  outline-offset: -2px;
+}

@@ -34,6 +34,22 @@ describe('parseEngine', () => {
     expect(() => parseEngine(thin)).toThrow(/2 to 4/)
   })
 
+  it('accepts an open template name and a gltf source', () => {
+    const radial = structuredClone(genericInline4Data)
+    radial.source = { ...radial.source, template: 'radial-9' }
+    expect(parseEngine(radial).source).toMatchObject({ kind: 'procedural', template: 'radial-9' })
+
+    const gltf = structuredClone(genericInline4Data) as { source: unknown }
+    gltf.source = { kind: 'gltf', path: 'models/example.glb', partMeshMap: { 'engine-block': 'Block' } }
+    const parsed = parseEngine(gltf)
+    expect(parsed.source).toEqual({
+      kind: 'gltf',
+      path: 'models/example.glb',
+      partMeshMap: { 'engine-block': 'Block' },
+    })
+    expect(parsed.category).toBe('engine')
+  })
+
   it('rejects an accessory anchor that is not a part', () => {
     const extra = structuredClone(genericInline4Data)
     ;(extra.parameters.accessories as Record<string, number[]>).turbo = [0, 0, 0]

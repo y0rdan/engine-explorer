@@ -1,7 +1,8 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef, type MutableRefObject } from 'react'
 import { Box3, PerspectiveCamera } from 'three'
-import { layoutFromEngine, type EngineLayout } from '../engine/layout.ts'
+import { type MotionLayout } from '../engine/layout.ts'
+import { layoutFor } from '../engine/templates.ts'
 import type { EngineRecord } from '../engine/schema.ts'
 import type { EngineRuntime } from '../engine/runtime.ts'
 import { stepRuntime } from '../engine/runtime.ts'
@@ -38,7 +39,7 @@ export function SceneDriver({
   const fitting = useRef(true)
   const lastSample = useRef(0)
   const box = useRef(new Box3())
-  const layoutCache = useRef<{ id: string; layout: EngineLayout } | null>(null)
+  const layoutCache = useRef<{ id: string; layout: MotionLayout } | null>(null)
   const sizeKey = useRef('')
 
   useEffect(() => {
@@ -62,7 +63,7 @@ export function SceneDriver({
     const root = scene.getObjectByName('engine-root')
     if (!root) return
     if (layoutCache.current?.id !== props.engine.id) {
-      layoutCache.current = { id: props.engine.id, layout: layoutFromEngine(props.engine) }
+      layoutCache.current = { id: props.engine.id, layout: layoutFor(props.engine) }
     }
     const layout = layoutCache.current.layout
     props.runtime.cutaway = props.cutaway

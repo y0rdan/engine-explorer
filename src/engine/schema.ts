@@ -1,5 +1,17 @@
-export const LAYOUTS = ['inline-4'] as const
+export const LAYOUTS = ['inline-4', 'v6', 'v8'] as const
 export type LayoutId = (typeof LAYOUTS)[number]
+
+// Reserved so a later catalog can list transmissions, brakes, and suspension
+// without a new field. This milestone only ships engines.
+export const CATEGORIES = ['engine', 'transmission', 'brakes', 'suspension'] as const
+export type CategoryId = (typeof CATEGORIES)[number]
+
+export const CATEGORY_LABELS: Record<CategoryId, string> = {
+  engine: 'Engines',
+  transmission: 'Transmissions',
+  brakes: 'Brakes',
+  suspension: 'Suspension',
+}
 
 export const SYSTEMS = [
   'engine',
@@ -38,6 +50,46 @@ export type KeyNumber = {
   unit?: string
 }
 
+export type TorqueNm = {
+  min: number
+  max: number
+  angle?: number
+}
+
+// Display fasteners for a later teardown pass. Torques are typical figures, not OEM charts.
+export type Fastener = {
+  type: string
+  size: string
+  count: number
+  positions: Vec3[]
+  torque_nm: TorqueNm
+  sequence: number[]
+  notes: string
+}
+
+export type FastenerLayout = {
+  cylinders: number
+  banks: number
+  heads: number
+  valvetrain: string
+}
+
+export type ParamValue = number | boolean | string
+
+export type ProceduralSource = {
+  kind: 'procedural'
+  template: string
+  params: Record<string, ParamValue>
+}
+
+export type GltfSource = {
+  kind: 'gltf'
+  path: string
+  partMeshMap: Record<string, string>
+}
+
+export type EngineSource = ProceduralSource | GltfSource
+
 export type EngineLayer = {
   id: string
   name: string
@@ -71,6 +123,7 @@ export type EnginePart = {
   assemblyOrder: number
   assemblyLabel: string
   layers: EngineLayer[]
+  fasteners?: Fastener[]
 }
 
 export type EngineSide = 'left' | 'right'
@@ -91,8 +144,12 @@ export type EngineRecord = {
   model: string
   engineCode: string
   yearRange: YearRange
+  category: CategoryId
   layout: LayoutId
   displacementCc: number
+  specs: KeyNumber[]
+  source: EngineSource
+  fastenerLayout: FastenerLayout
   parameters: EngineParameters
   parts: EnginePart[]
 }
@@ -103,8 +160,12 @@ const engineFields = new Set([
   'model',
   'engineCode',
   'yearRange',
+  'category',
   'layout',
   'displacementCc',
+  'specs',
+  'source',
+  'fastenerLayout',
   'parameters',
   'parts',
 ])
@@ -133,6 +194,7 @@ const partFields = new Set([
   'assemblyOrder',
   'assemblyLabel',
   'layers',
+  'fasteners',
 ])
 
 const layerFields = new Set([
@@ -233,6 +295,7 @@ function parsePart(value: unknown, index: number, ids: Set<string>, orders: Set<
   const safetyNote = value.safetyNote === undefined ? undefined : text(value.safetyNote, `${label}.safetyNote`)
   const funFact = value.funFact === undefined ? undefined : text(value.funFact, `${label}.funFact`)
   const keyNumbers = parseKeyNumbers(value.keyNumbers, `${label}.keyNumbers`)
+  const fasteners = value.fasteners === undefined ? undefined : parseFasteners(value.fasteners, `${label}.fasteners`)
   return {
     id,
     displayName: text(value.displayName, `${label}.displayName`),
@@ -257,6 +320,7 @@ function parsePart(value: unknown, index: number, ids: Set<string>, orders: Set<
     assemblyOrder,
     assemblyLabel: text(value.assemblyLabel, `${label}.assemblyLabel`),
     layers,
+    fasteners,
   }
 }
 
@@ -276,7 +340,110 @@ function parseKeyNumbers(value: unknown, label: string): KeyNumber[] {
   })
 }
 
-function parseParameters(value: unknown, partIds: Set<string>): EngineParameters {
+function parseFasteners(value: unknown, label: string): Fastener[] {
+  if (!Array.isArray(value) || value.length === 0) fail(`${label} must list at least 1 fastener`)
+  return value.map((item, index) => parseFastener(item, `${label}[${index}]`))
+}
+
+function parseFastener(value: unknown, label: string): Fastener {
+  if (!isRecord(value)) fail(`${label} must be an object`)
+  rejectUnknown(
+    value,
+    new Set(['type', 'size', 'count', 'positions', 'torque_nm', 'sequence', 'notes']),
+    label,
+  )
+  const count = integer(value.count, `${label}.count`, 1, 48)
+  if (!Array.isArray(value.positions) || value.positions.length !== count) {
+    fail(`${label}.positions must list ${count} points`)
+  }
+  const positions = value.positions.map((position, index) => vec3(position, `${label}.positions[${index}]`))
+  if (!Array.isArray(value.sequence) || value.sequence.length !== count) {
+    fail(`${label}.sequence must list ${count} steps`)
+  }
+  const sequence = value.sequence.map((step, index) => integer(step, `${label}.sequence[${index}]`, 1, count))
+  const sorted = sequence.slice().sort((a, b) => a - b)
+  for (let index = 0; index < count; index += 1) {
+    if (sorted[index] !== index + 1) fail(`${label}.sequence must be the steps 1 through ${count}`)
+  }
+  return {
+    type: text(value.type, `${label}.type`),
+    size: text(value.size, `${label}.size`),
+    count,
+    positions,
+    torque_nm: parseTorque(value.torque_nm, `${label}.torque_nm`),
+    sequence,
+    notes: text(value.notes, `${label}.notes`),
+  }
+}
+
+function parseTorque(value: unknown, label: string): TorqueNm {
+  if (!isRecord(value)) fail(`${label} must be an object`)
+  rejectUnknown(value, new Set(['min', 'max', 'angle']), label)
+  const min = metric(value.min, `${label}.min`, 0, 500)
+  const max = metric(value.max, `${label}.max`, 0, 500)
+  if (min > max) fail(`${label}.min must be less than or equal to max`)
+  const angle = value.angle === undefined ? undefined : metric(value.angle, `${label}.angle`, 0, 360)
+  return angle === undefined ? { min, max } : { min, max, angle }
+}
+
+function parseFastenerLayout(value: unknown): FastenerLayout {
+  if (!isRecord(value)) fail('fastenerLayout must be an object')
+  rejectUnknown(value, new Set(['cylinders', 'banks', 'heads', 'valvetrain']), 'fastenerLayout')
+  const cylinders = integer(value.cylinders, 'fastenerLayout.cylinders', 1, 16)
+  const banks = integer(value.banks, 'fastenerLayout.banks', 1, 4)
+  const heads = integer(value.heads, 'fastenerLayout.heads', 0, 8)
+  if (cylinders % banks !== 0) fail('fastenerLayout.cylinders must divide evenly across banks')
+  return {
+    cylinders,
+    banks,
+    heads,
+    valvetrain: text(value.valvetrain, 'fastenerLayout.valvetrain'),
+  }
+}
+
+function parseSource(value: unknown): EngineSource {
+  if (!isRecord(value)) fail('source must be an object')
+  const kind = text(value.kind, 'source.kind')
+  if (kind === 'procedural') {
+    rejectUnknown(value, new Set(['kind', 'template', 'params']), 'source')
+    const template = text(value.template, 'source.template')
+    if (!isRecord(value.params)) fail('source.params must be an object')
+    const params: Record<string, ParamValue> = {}
+    for (const [key, item] of Object.entries(value.params)) {
+      if (!/^[A-Za-z][\w-]*$/.test(key)) fail(`source.params.${key} is not a field name`)
+      if (typeof item === 'number') {
+        if (!Number.isFinite(item)) fail(`source.params.${key} must be finite`)
+        params[key] = item
+      } else if (typeof item === 'boolean') {
+        params[key] = item
+      } else if (typeof item === 'string') {
+        params[key] = text(item, `source.params.${key}`)
+      } else {
+        fail(`source.params.${key} must be a number, boolean, or string`)
+      }
+    }
+    return { kind: 'procedural', template, params }
+  }
+  if (kind === 'gltf') {
+    rejectUnknown(value, new Set(['kind', 'path', 'partMeshMap']), 'source')
+    const path = text(value.path, 'source.path')
+    if (!isRecord(value.partMeshMap)) fail('source.partMeshMap must be an object')
+    const partMeshMap: Record<string, string> = {}
+    for (const [id, mesh] of Object.entries(value.partMeshMap)) {
+      partMeshMap[id] = text(mesh, `source.partMeshMap.${id}`)
+    }
+    return { kind: 'gltf', path, partMeshMap }
+  }
+  fail('source.kind must be "procedural" or "gltf"')
+}
+
+function parseCategory(value: unknown): CategoryId {
+  const category = text(value, 'category')
+  if (!CATEGORIES.includes(category as CategoryId)) fail(`category must be one of ${CATEGORIES.join(', ')}`)
+  return category as CategoryId
+}
+
+function parseParameters(value: unknown, partIds: Set<string>, along: number): EngineParameters {
   if (!isRecord(value)) fail('parameters must be an object')
   rejectUnknown(value, parameterFields, 'parameters')
   const boreSpacing = value.boreSpacing
@@ -290,8 +457,9 @@ function parseParameters(value: unknown, partIds: Set<string>): EngineParameters
     width: metric(value.block.width, 'parameters.block.width', 0.12, 0.4),
     height: metric(value.block.height, 'parameters.block.height', 0.18, 0.45),
   }
-  if (block.length < boreSpacing * 3.4) {
-    fail('parameters.block.length is too short for four bores at this spacing')
+  const factor = Math.max(along - 1, 1) + 0.4
+  if (block.length < boreSpacing * factor) {
+    fail(`parameters.block.length is too short for ${along} bores at this spacing`)
   }
   const intakeSide = side(value.intakeSide, 'parameters.intakeSide')
   const exhaustSide = side(value.exhaustSide, 'parameters.exhaustSide')
@@ -329,21 +497,41 @@ export function parseEngine(value: unknown): EngineRecord {
     value.yearRange.end === null ? null : integer(value.yearRange.end, 'yearRange.end', start, 2035)
   const layout = text(value.layout, 'layout')
   if (!LAYOUTS.includes(layout as LayoutId)) fail(`layout must be one of ${LAYOUTS.join(', ')}`)
+  const category = parseCategory(value.category)
+  const source = parseSource(value.source)
+  const fastenerLayout = parseFastenerLayout(value.fastenerLayout)
+  const specs = parseKeyNumbers(value.specs, 'specs')
   if (!Array.isArray(value.parts) || value.parts.length === 0) fail('parts must be a non-empty array')
   const ids = new Set<string>()
   const orders = new Set<number>()
   const parts = value.parts.map((part, index) => parsePart(part, index, ids, orders))
+  const along = fastenerLayout.cylinders / fastenerLayout.banks
   return {
     id: text(value.id, 'id'),
     brand: text(value.brand, 'brand'),
     model: text(value.model, 'model'),
     engineCode: text(value.engineCode, 'engineCode'),
     yearRange: { start, end },
+    category,
     layout: layout as LayoutId,
     displacementCc: integer(value.displacementCc, 'displacementCc', 500, 10000),
-    parameters: parseParameters(value.parameters, ids),
+    specs,
+    source,
+    fastenerLayout,
+    parameters: parseParameters(value.parameters, ids, along),
     parts,
   }
+}
+
+export function cylinderCount(engine: EngineRecord): number {
+  return engine.fastenerLayout.cylinders
+}
+
+export function layoutLabel(layout: string): string {
+  if (layout === 'inline-4') return 'Inline-4'
+  if (layout === 'v6') return 'V6'
+  if (layout === 'v8') return 'V8'
+  return layout
 }
 
 export function formatDisplacement(cc: number): string {

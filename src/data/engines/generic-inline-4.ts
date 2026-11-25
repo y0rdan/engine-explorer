@@ -2,7 +2,9 @@
 // A later file such as toyota-2zr-fe.ts can use the same fields. Do not put
 // unverified brand repair claims in those files.
 
-export const genericInline4Data = {
+import { withInline4Fasteners } from './inline4-fasteners.ts'
+
+const genericInline4Base = {
   id: 'generic-inline-4',
   brand: 'Generic',
   model: 'Inline-4',
@@ -15,6 +17,7 @@ export const genericInline4Data = {
     block: { length: 0.46, width: 0.2, height: 0.3 },
     intakeSide: 'right',
     exhaustSide: 'left',
+    configuration: { cylinders: 4, banks: 1, heads: 1, valvetrain: 'dohc' },
     accessories: {
       'water-pump': [-0.27, 0.26, 0.02],
       alternator: [-0.28, 0.32, 0.14],
@@ -1291,3 +1294,5 @@ export const genericInline4Data = {
     },
   ],
 }
+
+export const genericInline4Data = withInline4Fasteners(genericInline4Base)

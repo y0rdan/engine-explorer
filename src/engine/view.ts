@@ -35,6 +35,7 @@ export function viewReducer(state: ViewState, action: ViewAction): ViewState {
         ...state,
         partId: action.id,
         layerId: null,
+        isolated: false,
         hoveredPartId: null,
       }
     case 'select-layer':

@@ -18,10 +18,13 @@ vi.mock('./studio.ts', () => ({
   STUDIO_LOAD_ERROR:
     'Studio lighting could not be loaded. The engine is shown with built-in lights.',
   clearStudioPreload: () => {},
+  disposeStudioPreload: () => {},
+  studioHdriTexture: () => null,
 }))
 
 vi.mock('@react-three/drei', () => ({
   Environment: () => null,
+  EnvironmentPortal: () => null,
   Lightformer: () => null,
   ContactShadows: () => null,
   AdaptiveDpr: () => null,
@@ -82,6 +85,8 @@ function renderCanvas() {
       runtime,
       reducedMotion: false,
       fitToken: 1,
+      fitSmooth: true,
+      padding: { top: 0, right: 0, bottom: 0, left: 0 },
       onSample: () => {},
     } satisfies DriverProps,
   }
@@ -101,6 +106,7 @@ function renderCanvas() {
       onSelectPart={() => {}}
       onSelectLayer={() => {}}
       onHover={() => {}}
+      onFastener={() => {}}
     />,
   )
 }

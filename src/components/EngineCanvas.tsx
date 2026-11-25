@@ -1,18 +1,21 @@
-import { AdaptiveDpr, ContactShadows, Environment, Lightformer } from '@react-three/drei'
-import { Canvas, useThree } from '@react-three/fiber'
-import { Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
-import { ACESFilmicToneMapping, Plane, SRGBColorSpace, Vector3 } from 'three'
+import { AdaptiveDpr, ContactShadows, EnvironmentPortal, Lightformer } from '@react-three/drei'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { ACESFilmicToneMapping, Plane, SRGBColorSpace, Vector3, type DataTexture } from 'three'
+import { attachLabelRenderer, createLabelRenderer, renderLabels } from './inline4/labels.ts'
 import type { EngineRecord } from '../engine/schema.ts'
 import { CanvasErrorBoundary } from './CanvasErrorBoundary.tsx'
 import { EngineControls } from './EngineControls.tsx'
 import { SCENE_LABEL } from './engineModel.ts'
 import { EngineViewProvider } from './inline4/chrome.tsx'
-import { Inline4Engine } from './inline4/Inline4Engine.tsx'
+import { Inline4Engine, type FastenerTip } from './inline4/Inline4Engine.tsx'
 import { SceneDriver, type DriverProps } from './SceneDriver.tsx'
 import {
   STUDIO_LOAD_ERROR,
   STUDIO_LOADING_MESSAGE,
+  disposeStudioPreload,
   preloadStudioHdri,
+  studioHdriTexture,
   studioHdriUrl,
 } from './studio.ts'
 
@@ -45,6 +48,7 @@ export function EngineCanvas({
   onSelectPart,
   onSelectLayer,
   onHover,
+  onFastener,
 }: {
   driverRef: MutableRefObject<DriverProps>
   pokeRef: MutableRefObject<() => void>
@@ -59,9 +63,11 @@ export function EngineCanvas({
   onSelectPart: (id: string) => void
   onSelectLayer: (partId: string, layerId: string) => void
   onHover: (id: string | null) => void
+  onFastener: (tip: FastenerTip | null) => void
 }) {
   const lowPower = useLowPower()
   const [lighting, setLighting] = useState<'loading' | 'ready' | 'failed'>('loading')
+  const [hdr, setHdr] = useState<DataTexture | null>(null)
   const clipPlane = useMemo(() => new Plane(new Vector3(0, 0, -1), 0.02), [])
   const down = useRef({ x: 0, y: 0 })
   const selected = engine.parts.find((part) => part.id === partId)
@@ -71,20 +77,23 @@ export function EngineCanvas({
     let active = true
     preloadStudioHdri(hdriUrl)
       .then(() => {
-        if (active) setLighting('ready')
+        if (!active) return
+        setHdr(studioHdriTexture())
+        setLighting('ready')
       })
       .catch(() => {
         if (active) setLighting('failed')
       })
     return () => {
       active = false
+      disposeStudioPreload()
     }
   }, [])
 
   return (
     <CanvasErrorBoundary>
       <Canvas
-        camera={{ position: [-1.28, 0.82, 1.08], fov: 32, near: 0.02, far: 40 }}
+        camera={{ position: [-1.15, 0.78, 0.72], fov: 30, near: 0.02, far: 40 }}
         dpr={lowPower ? [1, 1.25] : [1, 1.75]}
         frameloop="demand"
         gl={{
@@ -106,7 +115,7 @@ export function EngineCanvas({
         }}
         onCreated={({ gl, scene }) => {
           gl.toneMapping = ACESFilmicToneMapping
-          gl.toneMappingExposure = 0.96
+          gl.toneMappingExposure = 0.78
           gl.outputColorSpace = SRGBColorSpace
           gl.localClippingEnabled = true
           gl.setClearColor(0x000000, 0)
@@ -119,16 +128,16 @@ export function EngineCanvas({
       >
         {!lowPower && <AdaptiveDpr />}
         <CanvasAria label={label} />
-        <hemisphereLight args={['#f5f7fb', '#121416', 0.32]} />
-        <directionalLight position={[0.4, 5.6, 1.1]} intensity={1.7} color="#fff4e8" />
-        <directionalLight position={[-3.1, 2.1, 2.8]} intensity={0.72} color="#d5e4f4" />
-        <directionalLight position={[2.6, 1.4, -2.4]} intensity={0.4} color="#fffaf4" />
-        {lighting !== 'failed' && (
+        <hemisphereLight args={['#d5e0ee', '#1a1c1f', 0.22]} />
+        <directionalLight position={[0.35, 5.4, 0.8]} intensity={1.05} color="#fff6ee" />
+        <directionalLight position={[-3.2, 2.4, -2.4]} intensity={0.7} color="#c5d4ea" />
+        <directionalLight position={[2.6, 1.1, 2.5]} intensity={0.36} color="#ffd2b0" />
+        {hdr && (
           <Suspense fallback={null}>
-            <Environment files={hdriUrl} environmentIntensity={0.72} resolution={lowPower ? 128 : 256} frames={1}>
+            <EnvironmentPortal map={hdr} frames={1} resolution={lowPower ? 128 : 256} environmentIntensity={0.4}>
               <Lightformer
                 form="rect"
-                intensity={3}
+                intensity={1.35}
                 color="#fff3e6"
                 position={[0, 3.2, 0.35]}
                 rotation={[-Math.PI / 2, 0, 0]}
@@ -136,14 +145,15 @@ export function EngineCanvas({
               />
               <Lightformer
                 form="rect"
-                intensity={0.85}
+                intensity={0.45}
                 color="#d7e3f2"
-                position={[-2.2, 1.4, 2.1]}
-                scale={[2, 1.3, 1]}
+                position={[-2.2, 1.6, -1.8]}
+                scale={[1.6, 2.2, 1]}
               />
-            </Environment>
+            </EnvironmentPortal>
           </Suspense>
         )}
+        <ScreenLabels />
         <EngineControls />
         <SceneDriver driverRef={driverRef} pokeRef={pokeRef} />
         <EngineViewProvider
@@ -160,22 +170,9 @@ export function EngineCanvas({
             hoverPart: onHover,
           }}
         >
-          <Inline4Engine engine={engine} />
+          <Inline4Engine engine={engine} onFastener={onFastener} />
         </EngineViewProvider>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
-          <circleGeometry args={[0.95, 64]} />
-          <meshBasicMaterial color="#050505" />
-        </mesh>
-        <ContactShadows
-          position={[0, 0.032, 0]}
-          opacity={0.5}
-          scale={3}
-          blur={2.2}
-          far={0.7}
-          resolution={lowPower ? 256 : 512}
-          frames={lowPower ? 1 : 24}
-          color="#000"
-        />
+        <BakedContactShadow lowPower={lowPower} />
       </Canvas>
       {lighting === 'loading' && (
         <p className="lighting-status" role="status">
@@ -189,6 +186,41 @@ export function EngineCanvas({
       )}
     </CanvasErrorBoundary>
   )
+}
+
+const BakedContactShadow = memo(function BakedContactShadow({ lowPower }: { lowPower: boolean }) {
+  return (
+    <ContactShadows
+      position={[0, 0.001, 0]}
+      opacity={0.72}
+      scale={2.4}
+      blur={2.4}
+      far={0.85}
+      resolution={lowPower ? 256 : 512}
+      frames={40}
+      color="#000"
+    />
+  )
+})
+
+function ScreenLabels() {
+  const gl = useThree((state) => state.gl)
+  const scene = useThree((state) => state.scene)
+  const camera = useThree((state) => state.camera)
+  const size = useThree((state) => state.size)
+  const renderer = useMemo(() => createLabelRenderer(), [])
+  useLayoutEffect(() => {
+    const parent = gl.domElement.parentElement
+    if (!parent) return
+    attachLabelRenderer(renderer, parent, size.width, size.height)
+    return () => {
+      renderer.domElement.remove()
+    }
+  }, [gl, renderer, size.height, size.width])
+  useFrame(() => {
+    renderLabels(renderer, scene, camera, size.width, size.height)
+  })
+  return null
 }
 
 function CanvasAria({ label }: { label: string }) {

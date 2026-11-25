@@ -13,6 +13,13 @@ describe('view reducer', () => {
     expect(cleared.isolated).toBe(false)
   })
 
+  it('drops isolate when another part is selected or the guide closes', () => {
+    const alone = viewReducer(createView('battery'), { type: 'isolate' })
+    expect(alone.isolated).toBe(true)
+    expect(viewReducer(alone, { type: 'select-part', id: 'alternator' }).isolated).toBe(false)
+    expect(viewReducer(alone, { type: 'clear' }).isolated).toBe(false)
+  })
+
   it('toggles isolate only when a part is selected', () => {
     expect(viewReducer(createView(), { type: 'isolate' }).isolated).toBe(false)
     const alone = viewReducer(createView('battery'), { type: 'isolate' })

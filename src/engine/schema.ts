@@ -71,15 +71,52 @@ export type EnginePart = {
   assemblyOrder: number
   assemblyLabel: string
   layers: EngineLayer[]
+  fasteners: FastenerGroup[]
 }
 
 export type EngineSide = 'left' | 'right'
+
+export const VALVETRAINS = ['dohc', 'sohc', 'ohv'] as const
+export type Valvetrain = (typeof VALVETRAINS)[number]
+
+export type EngineConfiguration = {
+  cylinders: number
+  banks: number
+  heads: number
+  valvetrain: Valvetrain
+}
+
+export const FASTENER_TYPES = ['bolt', 'nut', 'stud', 'screw'] as const
+export type FastenerType = (typeof FASTENER_TYPES)[number]
+
+export type FastenerTorque = {
+  min: number
+  max: number
+  angle?: number
+}
+
+export type FastenerGroup = {
+  id: string
+  type: FastenerType
+  size: string
+  name: string
+  count: number
+  positions: Vec3[]
+  axis: Vec3
+  torqueNm: FastenerTorque
+  sequence: number[]
+  notes: string
+  anchors: string[] | null
+}
+
+export const TORQUE_NOTE = "Typical range — always check your engine's service manual."
 
 export type EngineParameters = {
   boreSpacing: number
   block: { length: number; width: number; height: number }
   intakeSide: EngineSide
   exhaustSide: EngineSide
+  configuration: EngineConfiguration
   accessories: Record<string, Vec3>
 }
 
@@ -133,6 +170,7 @@ const partFields = new Set([
   'assemblyOrder',
   'assemblyLabel',
   'layers',
+  'fasteners',
 ])
 
 const layerFields = new Set([
@@ -144,7 +182,30 @@ const layerFields = new Set([
   'assemblyLabel',
 ])
 
-const parameterFields = new Set(['boreSpacing', 'block', 'intakeSide', 'exhaustSide', 'accessories'])
+const parameterFields = new Set([
+  'boreSpacing',
+  'block',
+  'intakeSide',
+  'exhaustSide',
+  'configuration',
+  'accessories',
+])
+
+const fastenerFields = new Set([
+  'id',
+  'type',
+  'size',
+  'name',
+  'count',
+  'positions',
+  'axis',
+  'torqueNm',
+  'sequence',
+  'notes',
+  'anchors',
+])
+
+const torqueFields = new Set(['min', 'max', 'angle'])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -233,6 +294,7 @@ function parsePart(value: unknown, index: number, ids: Set<string>, orders: Set<
   const safetyNote = value.safetyNote === undefined ? undefined : text(value.safetyNote, `${label}.safetyNote`)
   const funFact = value.funFact === undefined ? undefined : text(value.funFact, `${label}.funFact`)
   const keyNumbers = parseKeyNumbers(value.keyNumbers, `${label}.keyNumbers`)
+  const fasteners = parseFasteners(value.fasteners, `${label}.fasteners`)
   return {
     id,
     displayName: text(value.displayName, `${label}.displayName`),
@@ -257,7 +319,74 @@ function parsePart(value: unknown, index: number, ids: Set<string>, orders: Set<
     assemblyOrder,
     assemblyLabel: text(value.assemblyLabel, `${label}.assemblyLabel`),
     layers,
+    fasteners,
   }
+}
+
+function parseFasteners(value: unknown, label: string): FastenerGroup[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) fail(`${label} must be an array`)
+  const ids = new Set<string>()
+  return value.map((entry, index) => parseFastener(entry, `${label}[${index}]`, ids))
+}
+
+function parseFastener(value: unknown, label: string, ids: Set<string>): FastenerGroup {
+  if (!isRecord(value)) fail(`${label} must be an object`)
+  rejectUnknown(value, fastenerFields, label)
+  const id = text(value.id, `${label}.id`)
+  if (ids.has(id)) fail(`${label} duplicates fastener id ${id}`)
+  ids.add(id)
+  const type = text(value.type, `${label}.type`)
+  if (!FASTENER_TYPES.includes(type as FastenerType)) fail(`${label}.type is not a known fastener`)
+  const count = integer(value.count, `${label}.count`, 1, 64)
+  if (!Array.isArray(value.positions) || value.positions.length !== count) {
+    fail(`${label}.positions must list ${count} points`)
+  }
+  const positions = value.positions.map((position, index) => vec3(position, `${label}.positions[${index}]`))
+  const axis = vec3(value.axis, `${label}.axis`)
+  const length = Math.hypot(axis[0], axis[1], axis[2])
+  if (length < 0.2) fail(`${label}.axis must be a direction`)
+  const sequence = parseSequence(value.sequence, count, `${label}.sequence`)
+  let anchors: string[] | null = null
+  if (value.anchors !== undefined && value.anchors !== null) {
+    if (!Array.isArray(value.anchors) || value.anchors.length !== count) {
+      fail(`${label}.anchors must list ${count} names`)
+    }
+    anchors = value.anchors.map((anchor, index) => text(anchor, `${label}.anchors[${index}]`))
+  }
+  return {
+    id,
+    type: type as FastenerType,
+    size: text(value.size, `${label}.size`),
+    name: text(value.name, `${label}.name`),
+    count,
+    positions,
+    axis,
+    torqueNm: parseTorque(value.torqueNm, `${label}.torqueNm`),
+    sequence,
+    notes: text(value.notes, `${label}.notes`),
+    anchors,
+  }
+}
+
+function parseSequence(value: unknown, count: number, label: string): number[] {
+  if (!Array.isArray(value) || value.length !== count) fail(`${label} must list ${count} numbers`)
+  const seen = new Set<number>()
+  return value.map((item, index) => {
+    const order = integer(item, `${label}[${index}]`, 1, count)
+    if (seen.has(order)) fail(`${label} repeats ${order}`)
+    seen.add(order)
+    return order
+  })
+}
+
+function parseTorque(value: unknown, label: string): FastenerTorque {
+  if (!isRecord(value)) fail(`${label} must be an object`)
+  rejectUnknown(value, torqueFields, label)
+  const min = metric(value.min, `${label}.min`, 0, 400)
+  const max = metric(value.max, `${label}.max`, min, 400)
+  const angle = value.angle === undefined ? undefined : metric(value.angle, `${label}.angle`, 0, 360)
+  return { min, max, angle }
 }
 
 function parseKeyNumbers(value: unknown, label: string): KeyNumber[] {
@@ -296,6 +425,7 @@ function parseParameters(value: unknown, partIds: Set<string>): EngineParameters
   const intakeSide = side(value.intakeSide, 'parameters.intakeSide')
   const exhaustSide = side(value.exhaustSide, 'parameters.exhaustSide')
   if (intakeSide === exhaustSide) fail('intake and exhaust must sit on opposite sides')
+  const configuration = parseConfiguration(value.configuration)
   const accessories: Record<string, Vec3> = {}
   if (value.accessories !== undefined) {
     if (!isRecord(value.accessories)) fail('parameters.accessories must be an object')
@@ -304,7 +434,22 @@ function parseParameters(value: unknown, partIds: Set<string>): EngineParameters
       accessories[id] = vec3(position, `parameters.accessories.${id}`)
     }
   }
-  return { boreSpacing, block, intakeSide, exhaustSide, accessories }
+  return { boreSpacing, block, intakeSide, exhaustSide, configuration, accessories }
+}
+
+function parseConfiguration(value: unknown): EngineConfiguration {
+  if (!isRecord(value)) fail('parameters.configuration must be an object')
+  rejectUnknown(value, new Set(['cylinders', 'banks', 'heads', 'valvetrain']), 'parameters.configuration')
+  const valvetrain = text(value.valvetrain, 'parameters.configuration.valvetrain')
+  if (!VALVETRAINS.includes(valvetrain as Valvetrain)) {
+    fail('parameters.configuration.valvetrain must be dohc, sohc, or ohv')
+  }
+  return {
+    cylinders: integer(value.cylinders, 'parameters.configuration.cylinders', 1, 16),
+    banks: integer(value.banks, 'parameters.configuration.banks', 1, 4),
+    heads: integer(value.heads, 'parameters.configuration.heads', 1, 4),
+    valvetrain: valvetrain as Valvetrain,
+  }
 }
 
 function metric(value: unknown, label: string, min: number, max: number): number {

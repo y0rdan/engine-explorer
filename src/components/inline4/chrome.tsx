@@ -1,33 +1,18 @@
 import { createContext, useContext, type ReactNode } from 'react'
-import { DoubleSide, FrontSide, type Plane } from 'three'
+import { EngineViewContext, useEngineView, type EngineView } from './engineView.ts'
+import { DoubleSide, FrontSide } from 'three'
 import { emphasisFor, type Emphasis } from '../../engine/emphasis.ts'
 import { roughnessTexture } from './textures.ts'
 
-export type EngineView = {
-  partId: string | null
-  layerId: string | null
-  hoveredPartId: string | null
-  isolated: boolean
-  assemblyPartId: string | null
-  cutaway: boolean
-  clipPlane: Plane
-  selectPart: (id: string) => void
-  selectLayer: (partId: string, layerId: string) => void
-  hoverPart: (id: string | null) => void
-}
-
-const ViewContext = createContext<EngineView | null>(null)
 const PartContext = createContext('')
 const LayerContext = createContext<string | null>(null)
 
 export function EngineViewProvider({ value, children }: { value: EngineView; children: ReactNode }) {
-  return <ViewContext.Provider value={value}>{children}</ViewContext.Provider>
+  return <EngineViewContext.Provider value={value}>{children}</EngineViewContext.Provider>
 }
 
 function useView(): EngineView {
-  const view = useContext(ViewContext)
-  if (!view) throw new Error('Engine view is missing')
-  return view
+  return useEngineView()
 }
 
 type MaterialKind = 'aluminum' | 'cover' | 'steel' | 'iron' | 'rubber' | 'plastic' | 'zinc' | 'copper' | 'fin' | 'ceramic' | 'lead' | 'gasket'

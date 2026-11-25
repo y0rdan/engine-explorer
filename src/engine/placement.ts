@@ -64,11 +64,23 @@ export function activeStepIndex(progress: number, count: number): number {
   return Math.min(count - 1, Math.floor(scaled))
 }
 
+export type AssemblyDirection = 'install' | 'remove'
+
 export type AssemblyStep = {
   partId: string
   layerId: string | null
+  fastenerId: string | null
   label: string
+  removeLabel: string | null
   order: number
+}
+
+export function fastenerLabel(
+  fastener: { count: number; size: string; name: string },
+  direction: AssemblyDirection,
+): string {
+  const verb = direction === 'remove' ? 'Remove' : 'Install'
+  return `${verb} ${fastener.count} x ${fastener.size} ${fastener.name}`
 }
 
 export function assemblySteps(engine: EngineRecord, partId: string | null, isolated: boolean): AssemblyStep[] {
@@ -81,19 +93,34 @@ export function assemblySteps(engine: EngineRecord, partId: string | null, isola
       .map((layer) => ({
         partId: part.id,
         layerId: layer.id,
+        fastenerId: null,
         label: layer.assemblyLabel,
+        removeLabel: null,
         order: layer.assemblyOrder,
       }))
   }
-  return engine.parts
-    .slice()
-    .sort((a, b) => a.assemblyOrder - b.assemblyOrder)
-    .map((part) => ({
+  const steps: AssemblyStep[] = []
+  for (const part of engine.parts.slice().sort((a, b) => a.assemblyOrder - b.assemblyOrder)) {
+    steps.push({
       partId: part.id,
       layerId: null,
+      fastenerId: null,
       label: part.assemblyLabel,
+      removeLabel: null,
       order: part.assemblyOrder,
-    }))
+    })
+    for (const fastener of part.fasteners) {
+      steps.push({
+        partId: part.id,
+        layerId: null,
+        fastenerId: fastener.id,
+        label: fastenerLabel(fastener, 'install'),
+        removeLabel: fastenerLabel(fastener, 'remove'),
+        order: part.assemblyOrder,
+      })
+    }
+  }
+  return steps
 }
 
 export function travelsFor(engine: EngineRecord, input: PlacementInput): Travels {
@@ -124,9 +151,15 @@ export function travelsFor(engine: EngineRecord, input: PlacementInput): Travels
   }
 
   if (input.mode === 'assemble-parts') {
-    sorted.forEach((part, index) => {
-      parts[part.id] = 1 - seatAmount(input.assembly, index, sorted.length)
+    const steps = assemblySteps(engine, null, false)
+    const partIndex = new Map<string, number>()
+    steps.forEach((step, index) => {
+      if (step.fastenerId === null && !partIndex.has(step.partId)) partIndex.set(step.partId, index)
     })
+    for (const part of sorted) {
+      const index = partIndex.get(part.id) ?? 0
+      parts[part.id] = 1 - seatAmount(input.assembly, index, steps.length)
+    }
     return { parts, layers }
   }
 
@@ -154,12 +187,17 @@ export function focusPartId(steps: readonly AssemblyStep[], progress: number, se
   return steps[activeStepIndex(progress, steps.length)]?.partId ?? null
 }
 
-export function stepLabel(steps: readonly AssemblyStep[], progress: number): string {
+export function stepLabel(
+  steps: readonly AssemblyStep[],
+  progress: number,
+  direction: AssemblyDirection = 'install',
+): string {
   if (steps.length === 0) return ''
   const index = activeStepIndex(progress, steps.length)
   const step = steps[index]
   if (!step) return ''
-  return `Step ${index + 1} of ${steps.length}: ${step.label}`
+  const text = direction === 'remove' && step.removeLabel ? step.removeLabel : step.label
+  return `Step ${index + 1} of ${steps.length}: ${text}`
 }
 
 export function movingPartOrders(parts: readonly EnginePart[]): number[] {

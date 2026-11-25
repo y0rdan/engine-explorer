@@ -1,3 +1,4 @@
+import { DataTexture } from 'three'
 import { RGBELoader } from 'three-stdlib'
 
 export const HDRI_FILE = 'hdri/studio_small_03_1k.hdr'
@@ -12,8 +13,15 @@ export function studioHdriUrl(): string {
 }
 
 let preloadTask: Promise<void> | undefined
+let preloaded: DataTexture | null = null
 
 export function clearStudioPreload(): void {
+  preloadTask = undefined
+}
+
+export function disposeStudioPreload(): void {
+  preloaded?.dispose()
+  preloaded = null
   preloadTask = undefined
 }
 
@@ -22,7 +30,10 @@ export function preloadStudioHdri(url: string): Promise<void> {
   preloadTask = new Promise<void>((resolve, reject) => {
     new RGBELoader().load(
       url,
-      () => resolve(),
+      (texture) => {
+        preloaded = texture
+        resolve()
+      },
       undefined,
       () => reject(new Error('The studio lighting could not be loaded')),
     )

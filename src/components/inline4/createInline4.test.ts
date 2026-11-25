@@ -36,7 +36,9 @@ describe('settled render budget', () => {
   it('keeps renderer.info under 100 draws after the shadow budget', () => {
     const width = 256
     const height = 256
-    const context = webgl2(createContext(width, height, { preserveDrawingBuffer: true }))
+    const raw = createContext(width, height, { preserveDrawingBuffer: true })
+    if (!raw) throw new Error('headless WebGL context was not created')
+    const context = webgl2(raw)
     const canvas = {
       width,
       height,

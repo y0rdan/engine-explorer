@@ -2,7 +2,7 @@
 
 Engine Explorer is a responsive web app that shows a 3D car engine. You tap a part to zoom in and learn how to fix or replace it.
 
-This milestone sets up the app, a placeholder 3D scene, automatic checks, and a free GitHub Pages deploy. The engine model, selection, and repair write-ups come in later milestones. No paid services and no secrets.
+The app shell, a CC0 engine model, automatic checks, and a free GitHub Pages deploy are in place. Part selection and repair write-ups come in later milestones. No paid services and no secrets. Model credits are in [MODEL_CREDITS.md](MODEL_CREDITS.md).
 
 Live site, after Pages is enabled and `main` is deployed: [https://y0rdan.github.io/engine-explorer/](https://y0rdan.github.io/engine-explorer/)
 
@@ -47,8 +47,8 @@ The next push to `main` publishes the site. If the workflow already ran and fail
 
 ## Roadmap
 
-1. **Setup and deploy** — this milestone. App shell, placeholder scene, CI, and GitHub Pages.
-2. **3D viewer** — load a free CC-licensed engine model.
+1. **Setup and deploy** — app shell, CI, and GitHub Pages.
+2. **3D viewer** — CC0 inline-four engine, orbit, zoom, and keyboard pan.
 3. **Tap to select** — highlight the part, zoom the camera, and open an info panel.
 4. **Content** — diagrams and repair steps for about 10 parts, plus a safety note.
 5. **Polish** — search, performance, and accessibility.

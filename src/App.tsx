@@ -31,7 +31,10 @@ export default function App() {
       </main>
       <footer className="footer">
         <p className="hint">Drag to orbit. Pinch or scroll to zoom. Arrow keys pan.</p>
-        <p className="credits">3D model credits will appear here.</p>
+        <p className="credits">
+          Engine model by{' '}
+          <a href="https://grab3d.com/models/vehicles/car-engine/">Grab3D</a> (CC0 1.0).
+        </p>
       </footer>
     </div>
   )

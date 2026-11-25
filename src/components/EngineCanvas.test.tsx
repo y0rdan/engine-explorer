@@ -3,6 +3,8 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { CanvasErrorBoundary } from './CanvasErrorBoundary.tsx'
 import { EngineCanvas } from './EngineCanvas.tsx'
+import { MODEL_LOAD_ERROR, MODEL_LOADING_MESSAGE, SCENE_LABEL } from './engineModel.ts'
+import { ModelLoadErrorBoundary } from './ModelLoadErrorBoundary.tsx'
 
 vi.mock('@react-three/fiber', () => ({
   Canvas: ({
@@ -19,10 +21,9 @@ vi.mock('@react-three/fiber', () => ({
     }, [onCreated])
     return <canvas ref={canvas}>{fallback}</canvas>
   },
-}))
-
-vi.mock('./PlaceholderScene.tsx', () => ({
-  PlaceholderScene: () => null,
+  useThree: () => {
+    throw new Error('useThree is only available inside the canvas')
+  },
 }))
 
 describe('EngineCanvas', () => {
@@ -30,10 +31,10 @@ describe('EngineCanvas', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     render(<EngineCanvas />)
 
-    const canvas = await screen.findByRole('img', { name: 'Placeholder 3D scene' })
+    const canvas = await screen.findByRole('img', { name: SCENE_LABEL })
     expect(canvas.tagName).toBe('CANVAS')
     expect(canvas).toHaveAttribute('tabindex', '0')
-    expect(canvas).toHaveTextContent('Placeholder 3D scene')
+    expect(canvas).toHaveTextContent(SCENE_LABEL)
   })
 
   it('shows an alert when the 3D view fails', () => {
@@ -51,5 +52,24 @@ describe('EngineCanvas', () => {
     )
 
     expect(screen.getByRole('alert')).toHaveTextContent('could not start the 3D view')
+  })
+})
+
+describe('ModelLoadErrorBoundary', () => {
+  it('shows a friendly message when the engine model fails to load', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    function BrokenModel(): ReactNode {
+      throw new Error('engine.glb 404')
+    }
+
+    render(
+      <ModelLoadErrorBoundary fallback={<p role="alert">{MODEL_LOAD_ERROR}</p>}>
+        <BrokenModel />
+      </ModelLoadErrorBoundary>,
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent(MODEL_LOAD_ERROR)
+    expect(MODEL_LOAD_ERROR).not.toBe(MODEL_LOADING_MESSAGE)
   })
 })

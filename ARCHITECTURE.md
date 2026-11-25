@@ -14,4 +14,4 @@ Engine Explorer is a single-page Vite app. Milestone 1 is the shell, checks, and
 
 `EngineCanvas` owns the React Three Fiber canvas. Orbit controls and the fit that frames the model on every viewport size live here. The loaded model is static, so the canvas uses `frameloop="demand"` and redraws while someone orbits, zooms, or pans. The page shell (header, stage, footer) stays put. The footer holds the orbit hint and the model credit.
 
-Loading the GLB is wrapped in its own `Suspense` boundary, with a loading message and a separate failed-load message. `CanvasErrorBoundary` still covers a browser that cannot start the 3D view.
+The model request is `useGLTF.preload` with Draco disabled. The loading message and the failed-load alert are DOM next to the canvas, not inside it. `CanvasErrorBoundary` still covers a browser that cannot start the 3D view.

@@ -1,6 +1,6 @@
-import { Html, useGLTF } from '@react-three/drei'
+import { useGLTF } from '@react-three/drei'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Suspense, useLayoutEffect, useMemo, type ReactNode } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { PerspectiveCamera, type Object3D } from 'three'
 import { CanvasErrorBoundary } from './CanvasErrorBoundary.tsx'
 import { EngineControls } from './EngineControls.tsx'
@@ -10,20 +10,10 @@ import {
   MODEL_LOADING_MESSAGE,
   SCENE_LABEL,
   engineModelUrl,
+  preloadEngineModel,
 } from './engineModel.ts'
-import { ModelLoadErrorBoundary } from './ModelLoadErrorBoundary.tsx'
 
 const modelUrl = engineModelUrl()
-
-function ModelStatus({ message, alert = false }: { message: string; alert?: boolean }) {
-  return (
-    <Html center>
-      <p className="model-status" role={alert ? 'alert' : 'status'}>
-        {message}
-      </p>
-    </Html>
-  )
-}
 
 function FrameModel({ object }: { object: Object3D }) {
   const camera = useThree((state) => state.camera)
@@ -41,7 +31,7 @@ function FrameModel({ object }: { object: Object3D }) {
 }
 
 function EngineModel() {
-  const { scene } = useGLTF(modelUrl)
+  const { scene } = useGLTF(modelUrl, false)
   const model = useMemo(() => scene.clone(true), [scene])
   return (
     <>
@@ -51,17 +41,31 @@ function EngineModel() {
   )
 }
 
-function ModelStage({ children }: { children: ReactNode }) {
+function ModelNotice({ message, alert }: { message: string; alert?: boolean }) {
   return (
-    <ModelLoadErrorBoundary
-      fallback={<ModelStatus alert message={MODEL_LOAD_ERROR} />}
-    >
-      <Suspense fallback={<ModelStatus message={MODEL_LOADING_MESSAGE} />}>{children}</Suspense>
-    </ModelLoadErrorBoundary>
+    <p className="canvas-fallback" role={alert ? 'alert' : 'status'}>
+      <span className="model-status">{message}</span>
+    </p>
   )
 }
 
 export function EngineCanvas() {
+  const [phase, setPhase] = useState<'loading' | 'ready' | 'failed'>('loading')
+
+  useEffect(() => {
+    let active = true
+    preloadEngineModel(modelUrl)
+      .then(() => {
+        if (active) setPhase('ready')
+      })
+      .catch(() => {
+        if (active) setPhase('failed')
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
   return (
     <CanvasErrorBoundary>
       <Canvas
@@ -84,12 +88,14 @@ export function EngineCanvas() {
         <directionalLight position={[4.5, 6, 3]} intensity={2.1} />
         <directionalLight position={[-3.5, 2.2, -2.5]} intensity={0.55} />
         <EngineControls />
-        <ModelStage>
-          <EngineModel />
-        </ModelStage>
+        {phase === 'ready' && (
+          <Suspense fallback={null}>
+            <EngineModel />
+          </Suspense>
+        )}
       </Canvas>
+      {phase === 'loading' && <ModelNotice message={MODEL_LOADING_MESSAGE} />}
+      {phase === 'failed' && <ModelNotice alert message={MODEL_LOAD_ERROR} />}
     </CanvasErrorBoundary>
   )
 }
-
-useGLTF.preload(modelUrl)

@@ -7,7 +7,7 @@ The engine shown in the app is one CC0 model. Its textures are packed inside the
 | | |
 | --- | --- |
 | File | `public/models/engine.glb` |
-| What it is | Stylized inline-four car engine, about 0.71 × 0.81 × 0.71 m, one mesh |
+| What it is | Stylized inline-four car engine, about 0.71 × 0.71 × 0.81 m (W × D × H), one mesh |
 | Source | [Car Engine on Grab3D](https://grab3d.com/models/vehicles/car-engine/) |
 | Author | Grab3D |
 | License | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/legalcode) (public domain; attribution not required) |

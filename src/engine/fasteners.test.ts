@@ -36,7 +36,9 @@ describe('generic inline-4 fasteners', () => {
     const steps = assemblySteps(genericInline4, null, false)
     const index = steps.findIndex((step) => step.fastenerId === 'head-bolts')
     expect(index).toBeGreaterThan(0)
-    expect(stepLabel(steps, (index + 0.55) / steps.length, 'remove')).toContain('Remove 10 x M10 cylinder head bolts')
+    const label = stepLabel(steps, (index + 0.55) / steps.length, 'remove')
+    expect(label).toContain('Remove 10 x M10 cylinder head bolts')
+    expect(label).toContain('8-4-1-5-9 / 7-3-2-6-10')
     const progress = (index + 0.2) / steps.length
     const travels = travelsFor(genericInline4, {
       mode: 'assemble-parts',

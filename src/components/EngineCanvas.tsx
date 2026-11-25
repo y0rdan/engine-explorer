@@ -218,7 +218,7 @@ function ScreenLabels() {
     }
   }, [gl, renderer, size.height, size.width])
   useFrame(() => {
-    renderLabels(renderer, scene, camera)
+    renderLabels(renderer, scene, camera, size.width, size.height)
   })
   return null
 }

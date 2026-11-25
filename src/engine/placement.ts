@@ -75,12 +75,19 @@ export type AssemblyStep = {
   order: number
 }
 
+export const HEAD_BOLT_ORDER = '8-4-1-5-9 / 7-3-2-6-10'
+
 export function fastenerLabel(
-  fastener: { count: number; size: string; name: string },
+  fastener: { count: number; size: string; name: string; id?: string; sequence?: readonly number[] },
   direction: AssemblyDirection,
 ): string {
   const verb = direction === 'remove' ? 'Remove' : 'Install'
-  return `${verb} ${fastener.count} x ${fastener.size} ${fastener.name}`
+  const base = `${verb} ${fastener.count} x ${fastener.size} ${fastener.name}`
+  if (fastener.id !== 'head-bolts' || !fastener.sequence) return base
+  const intake = fastener.sequence.slice(0, 5).join('-')
+  const exhaust = fastener.sequence.slice(5).join('-')
+  const order = `${intake} / ${exhaust}`
+  return order === HEAD_BOLT_ORDER ? `${base}. Order ${HEAD_BOLT_ORDER}` : base
 }
 
 export function assemblySteps(engine: EngineRecord, partId: string | null, isolated: boolean): AssemblyStep[] {

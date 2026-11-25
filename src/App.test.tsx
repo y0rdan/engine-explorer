@@ -13,7 +13,11 @@ describe('App', () => {
     expect(screen.getByRole('banner')).toHaveTextContent('Engine Explorer')
     expect(screen.getByRole('main')).toBeInTheDocument()
     expect(await screen.findByTestId('engine-canvas')).toBeInTheDocument()
-    expect(screen.getByRole('contentinfo')).toHaveTextContent('3D model credits')
+    expect(screen.getByRole('contentinfo')).toHaveTextContent('Grab3D')
+    expect(screen.getByRole('link', { name: 'Grab3D' })).toHaveAttribute(
+      'href',
+      'https://grab3d.com/models/vehicles/car-engine/',
+    )
     expect(
       screen.getByText('Drag to orbit. Pinch or scroll to zoom. Arrow keys pan.'),
     ).toBeInTheDocument()

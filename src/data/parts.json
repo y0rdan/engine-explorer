@@ -1,1 +1,7 @@
-[]
+[
+  {
+    "id": "engine",
+    "displayName": "Engine",
+    "meshNames": ["car-engine_body"]
+  }
+]

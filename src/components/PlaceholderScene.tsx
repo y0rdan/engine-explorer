@@ -1,6 +1,6 @@
 import { OrbitControls, Edges } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentRef } from 'react'
 import { PerspectiveCamera, type Mesh } from 'three'
 
 function usePrefersReducedMotion() {
@@ -45,7 +45,19 @@ function FrameSubject() {
 
 export function PlaceholderScene() {
   const mesh = useRef<Mesh>(null)
+  const controls = useRef<ComponentRef<typeof OrbitControls>>(null)
+  const gl = useThree((state) => state.gl)
   const reducedMotion = usePrefersReducedMotion()
+
+  useEffect(() => {
+    const orbit = controls.current
+    if (orbit === null) return
+    // This drei release's keyEvents prop calls connect() and does not register keydown.
+    orbit.listenToKeyEvents(gl.domElement)
+    return () => {
+      orbit.stopListenToKeyEvents()
+    }
+  }, [gl])
 
   useFrame((_, delta) => {
     if (reducedMotion || mesh.current === null) return
@@ -65,7 +77,13 @@ export function PlaceholderScene() {
         <meshStandardMaterial color="#d4843c" metalness={0.42} roughness={0.32} />
         <Edges color="#f6efe4" />
       </mesh>
-      <OrbitControls enableDamping dampingFactor={0.08} minDistance={2.2} maxDistance={8} />
+      <OrbitControls
+        ref={controls}
+        enableDamping
+        dampingFactor={0.08}
+        minDistance={2.2}
+        maxDistance={8}
+      />
     </>
   )
 }

@@ -11,4 +11,4 @@ Engine Explorer is a single-page Vite app. Milestone 1 is the shell, checks, and
 
 ## Scene
 
-Orbit controls live on the canvas so a later milestone can keep the same viewer, swap the box for a GLB, and move the camera when someone taps a part. The page shell (header, stage, footer) stays put. The footer is reserved for model credits.
+`EngineCanvas` owns the React Three Fiber canvas. Orbit controls live in `PlaceholderScene`, which is the rotating box inside that canvas, until a model replaces it. A later milestone can keep the same scene component, swap the box for a GLB, and move the camera when someone taps a part. The page shell (header, stage, footer) stays put. The footer holds the orbit hint and is reserved for model credits.

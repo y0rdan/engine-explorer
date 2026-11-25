@@ -1,5 +1,11 @@
-import { EngineCanvas } from './components/EngineCanvas.tsx'
+import { lazy, Suspense } from 'react'
 import './App.css'
+
+const EngineCanvas = lazy(() =>
+  import('./components/EngineCanvas.tsx').then((module) => ({
+    default: module.EngineCanvas,
+  })),
+)
 
 export default function App() {
   return (
@@ -19,11 +25,13 @@ export default function App() {
       </header>
       <main className="stage">
         <h2 className="visually-hidden">3D view</h2>
-        <EngineCanvas />
-        <p className="hint">Drag to orbit. Pinch or scroll to zoom.</p>
+        <Suspense fallback={<p className="canvas-fallback">Loading 3D view…</p>}>
+          <EngineCanvas />
+        </Suspense>
       </main>
       <footer className="footer">
-        <p>3D model credits will appear here.</p>
+        <p className="hint">Drag to orbit. Pinch or scroll to zoom. Arrow keys pan.</p>
+        <p className="credits">3D model credits will appear here.</p>
       </footer>
     </div>
   )

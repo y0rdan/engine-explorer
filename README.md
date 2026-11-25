@@ -30,7 +30,7 @@ Open [http://localhost:5173/engine-explorer/](http://localhost:5173/engine-explo
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pull requests: install, lint, typecheck, test, and build.
 
-[`.github/workflows/pages.yml`](.github/workflows/pages.yml) runs on every push to `main`. It builds the site and deploys `dist/` with the official GitHub Pages actions (`configure-pages`, `upload-pages-artifact`, and `deploy-pages`). You can also run that workflow by hand from the Actions tab.
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml) runs on every push to `main`. It lints, typechecks, and tests, then builds the site and deploys `dist/` with the official GitHub Pages actions (`configure-pages`, `upload-pages-artifact`, and `deploy-pages`). You can also run that workflow by hand from the Actions tab.
 
 Vite's `base` is `/engine-explorer/`, which is the path for `https://y0rdan.github.io/engine-explorer/`.
 

@@ -1,4 +1,4 @@
-import { DataTexture } from 'three'
+import { DataTexture, EquirectangularReflectionMapping } from 'three'
 import { RGBELoader } from 'three-stdlib'
 
 export const HDRI_FILE = 'hdri/studio_small_03_1k.hdr'
@@ -25,12 +25,17 @@ export function disposeStudioPreload(): void {
   preloadTask = undefined
 }
 
+export function studioHdriTexture(): DataTexture | null {
+  return preloaded
+}
+
 export function preloadStudioHdri(url: string): Promise<void> {
   if (preloadTask) return preloadTask
   preloadTask = new Promise<void>((resolve, reject) => {
     new RGBELoader().load(
       url,
       (texture) => {
+        texture.mapping = EquirectangularReflectionMapping
         preloaded = texture
         resolve()
       },

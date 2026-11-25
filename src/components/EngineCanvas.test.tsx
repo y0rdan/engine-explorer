@@ -19,10 +19,12 @@ vi.mock('./studio.ts', () => ({
     'Studio lighting could not be loaded. The engine is shown with built-in lights.',
   clearStudioPreload: () => {},
   disposeStudioPreload: () => {},
+  studioHdriTexture: () => null,
 }))
 
 vi.mock('@react-three/drei', () => ({
   Environment: () => null,
+  EnvironmentPortal: () => null,
   Lightformer: () => null,
   ContactShadows: () => null,
   AdaptiveDpr: () => null,

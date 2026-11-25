@@ -8,11 +8,9 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
-  Sprite,
-  SpriteMaterial,
-  CanvasTexture,
   type Material,
 } from 'three'
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import { layoutFromEngine, type EngineLayout, type Vec3 } from '../../engine/layout.ts'
 import type { EngineRecord, FastenerGroup, FastenerType } from '../../engine/schema.ts'
 import { block, groovedPulley, merged, solid, tube, beveledBox, translate } from './geometry.ts'
@@ -122,7 +120,8 @@ export function countVisibleDrawables(root: Object3D): number {
   let count = 0
   root.traverse((object) => {
     const mesh = object as Mesh
-    if (mesh.visible && (mesh.isMesh || (object as Sprite).isSprite)) count += 1
+    const sprite = object as { isSprite?: boolean }
+    if (mesh.visible && (mesh.isMesh || sprite.isSprite)) count += 1
   })
   return count
 }
@@ -696,12 +695,13 @@ function buildHeadLabels(): Group {
   if (typeof document === 'undefined') return group
   const numbers = [8, 4, 1, 5, 9, 7, 3, 2, 6, 10]
   for (let index = 0; index < numbers.length; index += 1) {
-    const sprite = new Sprite(new SpriteMaterial({ map: numberTexture(numbers[index] ?? index + 1), transparent: true, depthTest: false }))
-    sprite.scale.set(0.03, 0.03, 0.03)
-    sprite.visible = false
-    sprite.userData.labelIndex = index
-    sprite.raycast = () => {}
-    group.add(sprite)
+    const element = document.createElement('div')
+    element.className = 'bolt-number'
+    element.textContent = String(numbers[index] ?? index + 1)
+    const label = new CSS2DObject(element)
+    label.visible = false
+    label.userData.labelIndex = index
+    group.add(label)
   }
   return group
 }
@@ -724,28 +724,6 @@ function nominalScale(size: string): number {
   const match = /M(\d+(?:\.\d+)?)/.exec(size)
   const nominal = match ? Number(match[1]) : 8
   return nominal / 8
-}
-
-function numberTexture(value: number): CanvasTexture | null {
-  if (typeof document === 'undefined') return null
-  const canvas = document.createElement('canvas')
-  canvas.width = 64
-  canvas.height = 64
-  const context = canvas.getContext('2d')
-  if (!context) return null
-  context.clearRect(0, 0, 64, 64)
-  context.fillStyle = '#1c2226'
-  context.beginPath()
-  context.arc(32, 32, 28, 0, Math.PI * 2)
-  context.fill()
-  context.fillStyle = '#f2f0ea'
-  context.font = '700 32px sans-serif'
-  context.textAlign = 'center'
-  context.textBaseline = 'middle'
-  context.fillText(String(value), 32, 34)
-  const texture = new CanvasTexture(canvas)
-  texture.needsUpdate = true
-  return texture
 }
 
 function paint(geometry: BufferGeometry, hex: string): BufferGeometry {

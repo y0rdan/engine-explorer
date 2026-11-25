@@ -53,11 +53,7 @@ export function PartsSidebar({
           onChange={(event) => setQuery(event.target.value)}
         />
       </label>
-      <div
-        role="listbox"
-        aria-label="Engine parts"
-        aria-activedescendant={flat[cursor] ? `${idPrefix}-${flat[cursor].id}` : undefined}
-      >
+      <div>
         {filtered.map((group) => {
           const open = query.trim() !== '' || !closed[group.system] || group.parts.some((part) => part.id === selectedId)
           return (
@@ -74,6 +70,15 @@ export function PartsSidebar({
                 <ChevronDown size={16} aria-hidden="true" className={open ? 'chevron open' : 'chevron'} />
               </button>
               {open && (
+                <div
+                  role="listbox"
+                  aria-label={`${group.label} parts`}
+                  aria-activedescendant={
+                    flat[cursor] && group.parts.some((part) => part.id === flat[cursor]?.id)
+                      ? `${idPrefix}-${flat[cursor].id}`
+                      : undefined
+                  }
+                >
                 <ul role="presentation">
                   {group.parts.map((part) => {
                     const index = flat.findIndex((item) => item.id === part.id)
@@ -113,6 +118,7 @@ export function PartsSidebar({
                     )
                   })}
                 </ul>
+                </div>
               )}
             </section>
           )

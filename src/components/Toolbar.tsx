@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Gauge, Layers, Pause, Play, RotateCcw, Undo2, Wrench, Boxes, List } from 'lucide-react'
+import { forwardRef, type Ref } from 'react'
 import { RPM_MAX, RPM_MIN } from '../engine/kinematics.ts'
 import { activeStepIndex, assemblySteps, stepLabel, type AssemblyDirection } from '../engine/placement.ts'
 import { TORQUE_NOTE, type EngineRecord } from '../engine/schema.ts'
@@ -12,7 +13,7 @@ const SEGMENTS: { id: Segment; label: string; icon: typeof Boxes }[] = [
   { id: 'assembly', label: 'Assembly', icon: Wrench },
 ]
 
-export function Toolbar({
+export const Toolbar = forwardRef(function Toolbar({
   engine,
   segment,
   rpm,
@@ -56,7 +57,7 @@ export function Toolbar({
   onRpm: (rpm: number) => void
   onResetView: () => void
   onOpenParts: () => void
-}) {
+}, ref: Ref<HTMLDivElement>) {
   const steps = assemblySteps(engine, partId, segment === 'assembly' && isolated)
   const label = segment === 'assembly' ? stepLabel(steps, assembly, direction) : ''
   const shownRpm = playing ? rpm : 0
@@ -64,7 +65,7 @@ export function Toolbar({
   const activeIndex = activeStepIndex(assembly, steps.length)
   const fastenerStep = steps[activeIndex]?.fastenerId
   return (
-    <div className="toolbar" data-segment={segment}>
+    <div ref={ref} className="toolbar" data-segment={segment}>
       <div className="toolbar-row" role="toolbar" aria-label="Engine controls">
         <div className="segments" role="group" aria-label="Mode">
           {SEGMENTS.map((item) => {
@@ -192,4 +193,4 @@ export function Toolbar({
       {segment === 'assembly' && fastenerStep && <p className="torque-note">{TORQUE_NOTE}</p>}
     </div>
   )
-}
+})

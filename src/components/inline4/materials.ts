@@ -47,10 +47,12 @@ function glow(emphasis: Emphasis): { color: string; intensity: number } {
 export function sharedMaterial(
   kind: MaterialKind,
   emphasis: Emphasis,
-  clip: boolean,
+  tagged: boolean,
+  cutaway: boolean,
   plane: Plane | null,
   vertexColors = false,
 ): Material {
+  const clip = tagged && cutaway && plane !== null
   const key = `${kind}|${emphasis}|${clip ? 1 : 0}|${vertexColors ? 1 : 0}`
   let material = cache.get(key)
   if (!material) {
@@ -69,7 +71,7 @@ export function sharedMaterial(
     material.userData.shared = true
     cache.set(key, material)
   }
-  material.clippingPlanes = clip && plane ? [plane] : []
+  material.clippingPlanes = clip ? [plane] : []
   material.clipShadows = clip
   material.side = clip ? DoubleSide : FrontSide
   material.needsUpdate = true

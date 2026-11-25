@@ -29,6 +29,7 @@ function prepared(geometry: BufferGeometry, vertexColors: boolean): BufferGeomet
     else next.setAttribute('color', new BufferAttribute(new Float32Array(position.count * 3).fill(1), 3))
   }
   if (!normal) next.computeVertexNormals()
+  next.clearGroups()
   if (source !== geometry) source.dispose()
   return next
 }
@@ -46,6 +47,7 @@ export function merged(parts: BufferGeometry[]): BufferGeometry {
   }
   if (!geometry) return new BufferGeometry()
   geometry.computeVertexNormals()
+  geometry.clearGroups()
   return geometry
 }
 
@@ -74,6 +76,7 @@ export function beveledBox(width: number, height: number, depth: number, radius:
   })
   geometry.translate(0, 0, -depth / 2)
   geometry.computeVertexNormals()
+  geometry.clearGroups()
   return geometry
 }
 
@@ -88,6 +91,7 @@ export function solid(args: {
   const geometry = new CylinderGeometry(args.radiusTop, args.radiusBottom, args.height, args.segments ?? 12)
   if (args.rotation) geometry.rotateX(args.rotation[0]).rotateY(args.rotation[1]).rotateZ(args.rotation[2])
   if (args.position) geometry.translate(args.position[0], args.position[1], args.position[2])
+  geometry.clearGroups()
   return geometry
 }
 
@@ -99,7 +103,9 @@ export function block(size: Vec3, position: Vec3): BufferGeometry {
 
 export function tube(points: Vec3[], radius: number, tubular = 20): BufferGeometry {
   const curve = new CatmullRomCurve3(points.map((point) => new Vector3(point[0], point[1], point[2])))
-  return new TubeGeometry(curve, tubular, radius, 6, false)
+  const geometry = new TubeGeometry(curve, tubular, radius, 6, false)
+  geometry.clearGroups()
+  return geometry
 }
 
 export function groovedPulley(radius: number, width: number, grooves: number): BufferGeometry {
@@ -114,6 +120,7 @@ export function groovedPulley(radius: number, width: number, grooves: number): B
   }
   const geometry = new LatheGeometry(points, 18)
   geometry.rotateZ(Math.PI / 2)
+  geometry.clearGroups()
   return geometry
 }
 

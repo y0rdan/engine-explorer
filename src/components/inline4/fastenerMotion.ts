@@ -3,7 +3,6 @@ import {
   Matrix4,
   Object3D,
   Quaternion,
-  Sprite,
   Vector3,
   type Object3D as ThreeObject,
 } from 'three'
@@ -101,11 +100,10 @@ export function applyFasteners(
   })
   const labels = root.getObjectByName('bolt-labels')
   labels?.children.forEach((child) => {
-    const sprite = child as Sprite
-    const index = sprite.userData.labelIndex as number
+    const index = child.userData.labelIndex as number
     const at = labelPoints[index]
-    sprite.visible = showNumbers && Boolean(at)
-    if (at) sprite.position.copy(at).add(labelOffset)
+    child.visible = showNumbers && Boolean(at)
+    if (at) child.position.copy(at).add(labelOffset)
   })
 }
 

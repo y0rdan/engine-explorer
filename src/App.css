@@ -107,6 +107,20 @@
   outline-offset: -3px;
 }
 
+.bolt-number {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-pill);
+  background: var(--control);
+  color: var(--text);
+  font: 700 14px/1 var(--font-sans);
+  pointer-events: none;
+}
+
 .empty-hint,
 .gesture-hint,
 .lighting-status,

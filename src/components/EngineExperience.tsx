@@ -53,6 +53,8 @@ export function EngineExperience() {
   const [hintOn, setHintOn] = useState(() => !hintDismissed())
   const [tip, setTip] = useState<FastenerTip | null>(null)
   const [viewport, setViewport] = useState({ width: 800, height: 600 })
+  const [toolbarHeight, setToolbarHeight] = useState(0)
+  const toolbarRef = useRef<HTMLDivElement>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const historyLock = useRef(false)
@@ -93,9 +95,9 @@ export function EngineExperience() {
       top: 28,
       left: 12,
       right: part && !narrow ? 340 : 12,
-      bottom: 96 + sheet,
+      bottom: toolbarHeight + 16 + sheet,
     }),
-    [part, narrow, sheet],
+    [part, narrow, sheet, toolbarHeight],
   )
 
   const driverRef = useRef<DriverProps>({
@@ -126,6 +128,17 @@ export function EngineExperience() {
     driverRef.current.fitSmooth = fitSmooth
     driverRef.current.padding = padding
   }, [view, reducedMotion, fitToken, fitSmooth, padding, engine])
+
+  useLayoutEffect(() => {
+    const node = toolbarRef.current
+    if (!node) return
+    const measure = () => setToolbarHeight(Math.ceil(node.getBoundingClientRect().height))
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [segment, narrow, part, hud.playing])
 
   useEffect(() => {
     const node = viewportRef.current
@@ -332,6 +345,7 @@ export function EngineExperience() {
             </BottomSheet>
           )}
           <Toolbar
+            ref={toolbarRef}
             engine={engine}
             segment={segment}
             rpm={hud.rpm}

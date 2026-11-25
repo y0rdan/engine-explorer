@@ -53,6 +53,7 @@ export function SceneDriver({
   const box = useRef(new Box3())
   const layoutCache = useRef<{ id: string; layout: EngineLayout } | null>(null)
   const sizeKey = useRef('')
+  const paddingKey = useRef('')
   const target = useRef(new Vector3())
 
   useEffect(() => {
@@ -111,17 +112,21 @@ export function SceneDriver({
     const nextSize = `${size.width}x${size.height}`
     const sizeChanged = sizeKey.current !== nextSize
     if (sizeChanged) sizeKey.current = nextSize
+    const pad = props.padding
+    const nextPadding = `${pad.top}:${pad.right}:${pad.bottom}:${pad.left}`
+    const paddingChanged = paddingKey.current !== nextPadding
+    if (paddingChanged) paddingKey.current = nextPadding
     const tokenChanged = props.fitToken !== token.current
     if (tokenChanged) token.current = props.fitToken
     const playing = props.runtime.explodePlaying || props.runtime.assemblyPlaying
-    if (tokenChanged || sizeChanged) userFramed.current = false
+    if (tokenChanged || sizeChanged || paddingChanged) userFramed.current = false
     let cameraMoving = false
     if (
       camera instanceof PerspectiveCamera &&
       isShowroomControls(controls) &&
       shouldRefit({
         tokenChanged,
-        sizeChanged,
+        sizeChanged: sizeChanged || paddingChanged,
         playing,
         userHold: userHold.current,
         userFramed: userFramed.current,

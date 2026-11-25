@@ -68,8 +68,15 @@ function Showroom({
       const emphasis = ids.partId
         ? emphasisForMesh(ids.partId, ids.layerId, view)
         : 'idle'
-      const clip = Boolean(mesh.userData.clip)
-      mesh.material = sharedMaterial(kind, emphasis, clip, view.clipPlane, Boolean(mesh.userData.vertexColors))
+      const tagged = Boolean(mesh.userData.clip)
+      mesh.material = sharedMaterial(
+        kind,
+        emphasis,
+        tagged,
+        view.cutaway,
+        view.clipPlane,
+        Boolean(mesh.userData.vertexColors),
+      )
     })
     root.traverse((object) => {
       if (!object.name.startsWith('part:')) return

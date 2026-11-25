@@ -11,8 +11,10 @@ on:
 permissions:
   contents: read
 
+# Own group so a starter or other workflow using "pages" cannot cancel this deploy.
+# In-progress production deploys are left to finish.
 concurrency:
-  group: pages
+  group: engine-explorer-pages
   cancel-in-progress: false
 
 jobs:

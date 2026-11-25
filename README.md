@@ -2,7 +2,7 @@
 
 Engine Explorer is a responsive web app that shows a 3D car engine. You tap a part to zoom in and learn how to fix or replace it.
 
-The app shell, a CC0 engine model, automatic checks, and a free GitHub Pages deploy are in place. Part selection and repair write-ups come in later milestones. No paid services and no secrets. Model credits are in [MODEL_CREDITS.md](MODEL_CREDITS.md).
+The app shell, a parametric inline-4, part guides, explode and assembly controls, automatic checks, and a free GitHub Pages deploy are in place. A CC0 reference model stays in the repo and is not loaded. No paid services and no secrets. Credits are in [MODEL_CREDITS.md](MODEL_CREDITS.md).
 
 Live site, after Pages is enabled and `main` is deployed: [https://y0rdan.github.io/engine-explorer/](https://y0rdan.github.io/engine-explorer/)
 
@@ -45,14 +45,24 @@ After this setup is on `main`:
 
 The next push to `main` publishes the site. If the workflow already ran and failed before this switch, open **Actions → Deploy to GitHub Pages** and run it again.
 
+Open a part directly with a query on the project path, for example [http://localhost:5173/engine-explorer/?part=radiator](http://localhost:5173/engine-explorer/?part=radiator). Choosing a part updates that query. Esc, or Close, returns to the whole engine.
+
+## Add an engine
+
+1. Copy [`src/data/engines/generic-inline-4.ts`](src/data/engines/generic-inline-4.ts). Fill in the identity (`brand`, `model`, `engineCode`, years, displacement), the inline-4 parameters (bore spacing, block size, which side the intake and exhaust sit on, accessory positions), and the parts. Each part needs a description, and each of its 2–4 layers needs one too.
+2. Register the file in [`src/data/engines/catalog.ts`](src/data/engines/catalog.ts). The schema check runs as the catalog loads.
+3. A new arrangement, such as a V6 or a boxer, needs a new layout template component and a new `layout` id in [`src/engine/schema.ts`](src/engine/schema.ts). An inline-4 can reuse the template that is already here.
+
+A later file such as `toyota-2zr-fe.ts` can use the same fields. Do not add brand repair claims that have not been written for this project. Assembly order is the hook a later milestone can use for torque, tools, and notes.
+
 ## Roadmap
 
 1. **Setup and deploy** — app shell, CI, and GitHub Pages.
-2. **3D viewer** — CC0 inline-four engine, orbit, zoom, and keyboard pan.
-3. **Tap to select** — highlight the part, zoom the camera, and open an info panel.
-4. **Content** — diagrams and repair steps for about 10 parts, plus a safety note.
-5. **Polish** — search, performance, and accessibility.
+2. **3D viewer** — orbit, zoom, and keyboard pan. The CC0 reference model stays in the repo.
+3. **Inline-4 template** — parametric engine, part guides, explode, assembly, and a running crank.
+4. **Real engines** — data files for production engines, with service steps attached to the assembly order.
+5. **Polish** — search, and more layouts (V6, boxer, and the rest).
 
 ## Project layout
 
-See [ARCHITECTURE.md](ARCHITECTURE.md). In short: UI in `src/components/`, part copy in `src/data/parts.json`, and GLB files in `public/models/`.
+See [ARCHITECTURE.md](ARCHITECTURE.md). In short: UI in `src/components/`, engine files in `src/data/engines/`, the inline-4 template in `src/components/inline4/`, and the reference GLB in `public/models/`.

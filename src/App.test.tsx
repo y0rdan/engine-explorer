@@ -18,8 +18,8 @@ describe('App', () => {
       'href',
       'https://grab3d.com/models/vehicles/car-engine/',
     )
-    expect(
-      screen.getByText('Drag to orbit. Pinch or scroll to zoom. Arrow keys pan.'),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('contentinfo')).toHaveTextContent('not loaded')
+    expect(screen.getByText(/Drag to orbit/)).toBeInTheDocument()
+    expect(screen.getByRole('listbox', { name: 'Engine parts' })).toBeInTheDocument()
   })
 })

@@ -1,0 +1,141 @@
+.app {
+  height: 100dvh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #101418;
+  color: #f2f0ea;
+}
+
+.header,
+.footer {
+  flex: none;
+  background: #171d21;
+}
+
+.header {
+  border-bottom: 1px solid #2a3338;
+  padding-top: env(safe-area-inset-top);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+.logo {
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.header p {
+  margin: 0.15rem 0 0;
+  color: #a8b0aa;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.stage canvas:focus-visible {
+  outline: 2px solid #e0a15a;
+  outline-offset: -3px;
+}
+
+.footer {
+  border-top: 1px solid #2a3338;
+  color: #8e9892;
+  font-size: 0.75rem;
+  padding-bottom: env(safe-area-inset-bottom);
+  text-align: center;
+}
+
+.hint,
+.credits {
+  max-width: 72rem;
+  margin: 0 auto;
+  line-height: 1.35;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+.hint {
+  padding-top: 0.45rem;
+  padding-bottom: 0.1rem;
+  color: #d5dbd6;
+}
+
+.credits {
+  padding-top: 0.1rem;
+  padding-bottom: 0.5rem;
+}
+
+.canvas-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 1.5rem;
+  text-align: center;
+  color: #d5dbd6;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (min-width: 720px) {
+  .header-inner {
+    gap: 0.9rem;
+    padding-top: 0.9rem;
+    padding-bottom: 0.9rem;
+    padding-left: max(1.5rem, env(safe-area-inset-left));
+    padding-right: max(1.5rem, env(safe-area-inset-right));
+  }
+
+  .header h1 {
+    font-size: 1.375rem;
+  }
+
+  .header p,
+  .hint,
+  .credits {
+    font-size: 0.875rem;
+  }
+
+  .hint,
+  .credits {
+    padding-left: max(1.5rem, env(safe-area-inset-left));
+    padding-right: max(1.5rem, env(safe-area-inset-right));
+  }
+}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { categoriesIn, filterEngines, layoutsIn } from '../data/engines/catalog.ts'
-import { CATEGORY_LABELS, cylinderCount, formatDisplacement, layoutLabel, type CategoryId, type EngineRecord } from '../engine/schema.ts'
+import { categoriesIn, filterCards, layoutsIn, type EngineCard } from '../data/engines/cards.ts'
+import { CATEGORY_LABELS, formatDisplacement, layoutLabel, type CategoryId } from '../engine/schema.ts'
 import './EnginePicker.css'
 
 export function EnginePicker({
@@ -8,7 +8,7 @@ export function EnginePicker({
   unknown,
   onSelect,
 }: {
-  engines: readonly EngineRecord[]
+  engines: readonly EngineCard[]
   unknown: boolean
   onSelect: (id: string) => void
 }) {
@@ -17,7 +17,7 @@ export function EnginePicker({
   const [layout, setLayout] = useState<string | null>(null)
   const [text, setText] = useState('')
   const layouts = layoutsIn(engines, category)
-  const visible = filterEngines(engines, { category, layout, text })
+  const visible = filterCards(engines, { category, layout, text })
 
   return (
     <section className="engine-picker" aria-label="Engines">
@@ -68,7 +68,7 @@ export function EnginePicker({
       ) : (
         <ul className="engine-grid">
           {visible.map((engine) => {
-            const cylinders = cylinderCount(engine)
+            const cylinders = engine.cylinders
             return (
               <li key={engine.id}>
                 <button type="button" className="engine-card" onClick={() => onSelect(engine.id)}>

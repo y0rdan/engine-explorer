@@ -59,7 +59,7 @@ Assembly mode uses the same offsets. Progress 0 is fully apart. Progress 1 is fu
 
 The crank is solved from the bank angle and the firing order. A 60° V6 with order 1-2-3-4-5-6 gets split-pin throws: the two journals on one station are 60° apart, and the throw centers are 120° apart, so the engine fires every 120°. A 90° V8 with order 1-8-4-3-6-5-7-2 gets a cross-plane crank: one shared pin per station, pins 90° apart, front opposite rear and the middle pair opposite each other. Rods follow slider-crank math along each bank's bore axis, not straight up.
 
-Odd-numbered cylinders sit on the side that makes that crank real. On the V6 that is the left bank (cylinders 1, 3, 5). On the V8 the firing order puts cylinders 1, 3, 5, and 7 on the right bank. Exploded heads and covers move outward along their own bank axis.
+Odd-numbered cylinders sit on the left bank, the driver side when you look at the front of the engine: 1, 3, 5 on the V6 and 1, 3, 5, 7 on the V8. The V8 crank orbit is mirrored in Z so those cylinders can stay on the left and the pins still form a cross. Exploded heads and covers move outward along their own bank axis.
 
 ## How to add a layout template
 

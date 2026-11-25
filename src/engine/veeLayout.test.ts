@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { genericV6, genericV8 } from '../data/engines/catalog.ts'
 import { pistonHeight } from './kinematics.ts'
+import { pistonPhaseOffset } from './layout.ts'
 import { layoutVee, angDiff, planVee, throwCenters, V6_FIRING_ORDER, V8_FIRING_ORDER } from './veeLayout.ts'
 
 describe('V layout template', () => {
@@ -40,6 +41,23 @@ describe('V layout template', () => {
     }
   })
 
+  it('keeps odd cylinders on the left bank', () => {
+    for (const layout of [v6, v8]) {
+      for (const cylinder of layout.cylinders) {
+        expect(cylinder.bank).toBe(cylinder.number % 2 === 1 ? 'left' : 'right')
+        expect(cylinder.zSign).toBe(cylinder.number % 2 === 1 ? -1 : 1)
+      }
+    }
+    expect(v6.cylinders.filter((cylinder) => cylinder.bank === 'left').map((cylinder) => cylinder.number)).toEqual([
+      1, 3, 5,
+    ])
+    expect(v8.cylinders.filter((cylinder) => cylinder.bank === 'left').map((cylinder) => cylinder.number)).toEqual([
+      1, 3, 5, 7,
+    ])
+    expect(v8.cylinders.some((cylinder) => cylinder.crankMirror)).toBe(true)
+    expect(v6.cylinders.some((cylinder) => cylinder.crankMirror)).toBe(false)
+  })
+
   it('fires the cross-plane V8 1-8-4-3-6-5-7-2 every 90 degrees', () => {
     expect(fireOrder(v8.cylinders, V8_FIRING_ORDER)).toEqual(V8_FIRING_ORDER)
     const step = Math.PI / 2
@@ -63,13 +81,13 @@ describe('V layout template', () => {
       for (const cylinder of layout.cylinders) {
         const fired = pistonHeight(
           cylinder.fireAngle,
-          cylinder.phase - cylinder.beta,
+          pistonPhaseOffset(cylinder),
           layout.crankRadius,
           layout.rodLength,
         )
         const opposite = pistonHeight(
           cylinder.fireAngle + Math.PI,
-          cylinder.phase - cylinder.beta,
+          pistonPhaseOffset(cylinder),
           layout.crankRadius,
           layout.rodLength,
         )

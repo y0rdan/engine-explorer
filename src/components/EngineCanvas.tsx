@@ -1,14 +1,17 @@
 import { AdaptiveDpr, ContactShadows, Environment, Lightformer } from '@react-three/drei'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { ACESFilmicToneMapping, Plane, SRGBColorSpace, Vector3 } from 'three'
 import type { EngineRecord } from '../engine/schema.ts'
 import { CanvasErrorBoundary } from './CanvasErrorBoundary.tsx'
 import { EngineControls } from './EngineControls.tsx'
 import { SCENE_LABEL } from './engineModel.ts'
 import { EngineViewProvider } from './inline4/chrome.tsx'
-import { Inline4Engine } from './inline4/Inline4Engine.tsx'
-import { VeeEngine } from './vee/VeeEngine.tsx'
+
+const Inline4Engine = lazy(() =>
+  import('./inline4/Inline4Engine.tsx').then((module) => ({ default: module.Inline4Engine })),
+)
+const VeeEngine = lazy(() => import('./vee/VeeEngine.tsx').then((module) => ({ default: module.VeeEngine })))
 import { SceneDriver, type DriverProps } from './SceneDriver.tsx'
 import {
   STUDIO_LOAD_ERROR,
@@ -20,10 +23,8 @@ import {
 const hdriUrl = studioHdriUrl()
 
 function EngineModel({ engine }: { engine: EngineRecord }) {
-  if (engine.source.kind === 'procedural' && (engine.source.template === 'v6' || engine.source.template === 'v8')) {
-    return <VeeEngine engine={engine} />
-  }
-  return <Inline4Engine engine={engine} />
+  const vee = engine.source.kind === 'procedural' && (engine.source.template === 'v6' || engine.source.template === 'v8')
+  return <Suspense fallback={null}>{vee ? <VeeEngine engine={engine} /> : <Inline4Engine engine={engine} />}</Suspense>
 }
 
 function useLowPower(): boolean {

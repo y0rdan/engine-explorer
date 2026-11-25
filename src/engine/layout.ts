@@ -16,6 +16,12 @@ export type CylinderMotion = {
   beta: number
   boreAxis: Vec3
   journalX: number
+  // Mirrored cranks orbit the opposite way so odd cylinders can stay on the left bank.
+  crankMirror?: boolean
+}
+
+export function pistonPhaseOffset(cylinder: CylinderMotion): number {
+  return cylinder.crankMirror ? cylinder.phase + cylinder.beta : cylinder.phase - cylinder.beta
 }
 
 export type MotionLayout = {

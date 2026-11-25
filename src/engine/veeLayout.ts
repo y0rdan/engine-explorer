@@ -86,6 +86,7 @@ type Draft = {
   beta: number
   phase: number
   fireAngle: number
+  crankMirror: boolean
 }
 
 function stationsOf<T extends { station: number }>(cylinders: readonly T[]): T[][] {
@@ -105,25 +106,31 @@ function pinPattern(drafts: readonly Draft[], bankAngle: number): 'shared' | 'sp
   return 'other'
 }
 
-function draftPlan(oddBeta: number, fires: readonly number[], perBank: number): Draft[] {
+function draftPlan(oddBeta: number, fires: readonly number[], perBank: number, crankMirror: boolean): Draft[] {
   const drafts: Draft[] = []
   for (let number = 1; number <= perBank * 2; number += 1) {
     const odd = number % 2 === 1
     const beta = odd ? oddBeta : -oddBeta
     const station = odd ? (number - 1) / 2 : number / 2 - 1
+    const fire = fires[number - 1] ?? 0
+    // A mirrored crank flips the pin's Z orbit so the same firing order still
+    // reaches top dead center with the odd bank on the left.
+    const phase = crankMirror ? wrapAngle(-beta - fire) : wrapAngle(beta - fire)
     drafts.push({
       number,
       station,
       beta,
-      phase: wrapAngle(beta - (fires[number - 1] ?? 0)),
-      fireAngle: fires[number - 1] ?? 0,
+      phase,
+      fireAngle: fire,
+      crankMirror,
     })
   }
   return drafts
 }
 
-// Odd-numbered cylinders sit on whichever side makes the crank real:
-// a 60° V6 gets split pins 60° apart, a 90° V8 gets one shared pin per throw.
+// Odd cylinders stay on the left bank (GM numbering, viewed from the front).
+// A plain crank is tried first. If that cannot make the firing intervals even,
+// the pin orbit is mirrored in Z.
 export function planVee(input: VeePlanInput): VeeCylinder[] {
   const count = input.cylindersPerBank * 2
   if (input.firingOrder.length !== count) {
@@ -139,9 +146,10 @@ export function planVee(input: VeePlanInput): VeeCylinder[] {
   const fires = fireAngles(input.firingOrder)
   const interval = (Math.PI * 4) / count
   const preferShared = Math.abs(bankAngle - interval) < 0.15
+  const oddBeta = -half
   let chosen: Draft[] | null = null
-  for (const oddBeta of [half, -half]) {
-    const drafts = draftPlan(oddBeta, fires, input.cylindersPerBank)
+  for (const crankMirror of [false, true]) {
+    const drafts = draftPlan(oddBeta, fires, input.cylindersPerBank, crankMirror)
     const pattern = pinPattern(drafts, bankAngle)
     if (preferShared && pattern === 'shared') {
       chosen = drafts
@@ -169,6 +177,7 @@ export function planVee(input: VeePlanInput): VeeCylinder[] {
       journalX: x,
       bank: zSign < 0 ? 'left' : 'right',
       zSign,
+      crankMirror: draft.crankMirror,
     }
   })
 }

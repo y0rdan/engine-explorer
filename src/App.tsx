@@ -2,9 +2,10 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import './App.css'
 import { EnginePicker } from './components/EnginePicker.tsx'
 import { EngineSwitcher } from './components/EngineSwitcher.tsx'
-import { engineById, engines } from './data/engines/catalog.ts'
+import { cardById, engineCards } from './data/engines/cards.ts'
+import { loadEngine } from './data/engines/loadEngine.ts'
+import { formatDisplacement, type EngineRecord } from './engine/schema.ts'
 import { readEngineParam, urlForEngine } from './engine/urlState.ts'
-import { formatDisplacement, formatYears } from './engine/schema.ts'
 
 const EngineExperience = lazy(() =>
   import('./components/EngineExperience.tsx').then((module) => ({
@@ -13,23 +14,53 @@ const EngineExperience = lazy(() =>
 )
 
 export default function App() {
-  const [engineId, setEngineId] = useState(() => readEngineParam(window.location.search))
+  const [engineId, setEngineId] = useState(() => {
+    const id = readEngineParam(window.location.search)
+    return id && cardById(id) ? id : null
+  })
   const [unknown, setUnknown] = useState(() => {
     const id = readEngineParam(window.location.search)
-    return id !== null && engineById(id) === null
+    return id !== null && cardById(id) === null
   })
+  const [engine, setEngine] = useState<EngineRecord | null>(null)
+
+  useEffect(() => {
+    const id = readEngineParam(window.location.search)
+    if (id !== null && cardById(id) === null) {
+      window.history.replaceState({}, '', urlForEngine(null, window.location))
+    }
+  }, [engineId])
 
   useEffect(() => {
     const onPop = () => {
       const id = readEngineParam(window.location.search)
+      if (id !== null && cardById(id) === null) {
+        window.history.replaceState({}, '', urlForEngine(null, window.location))
+        setEngineId(null)
+        setUnknown(true)
+        return
+      }
       setEngineId(id)
-      setUnknown(id !== null && engineById(id) === null)
+      setUnknown(false)
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
-  const engine = engineId ? engineById(engineId) : null
+  useEffect(() => {
+    const id = engineId && cardById(engineId) ? engineId : null
+    if (!id) return
+    let live = true
+    loadEngine(id).then((record) => {
+      if (live) setEngine(record)
+    })
+    return () => {
+      live = false
+    }
+  }, [engineId])
+
+  const card = engineId ? cardById(engineId) : null
+  const ready = engine && card && engine.id === card.id ? engine : null
 
   function showEngine(id: string) {
     const next = urlForEngine(id, window.location, true)
@@ -57,16 +88,16 @@ export default function App() {
           <div>
             <h1>Engine Explorer</h1>
             <p>
-              {engine
-                ? `${engine.brand} ${engine.engineCode} · ${formatDisplacement(engine.displacementCc)} · ${formatYears(engine.yearRange)}`
+              {card
+                ? `${card.brand} ${card.engineCode} · ${formatDisplacement(card.displacementCc)} example`
                 : 'Choose an engine'}
             </p>
           </div>
-          {engine && (
+          {card && (
             <div className="header-tools">
               <EngineSwitcher
-                engines={engines.filter((item) => item.category === 'engine')}
-                value={engine.id}
+                engines={engineCards.filter((item) => item.category === 'engine')}
+                value={card.id}
                 onChange={showEngine}
               />
               <button type="button" className="text-button" onClick={showCatalog}>
@@ -77,13 +108,15 @@ export default function App() {
         </div>
       </header>
       <main className="stage">
-        <h2 className="visually-hidden">{engine ? '3D view' : 'Engine catalog'}</h2>
-        {engine ? (
+        <h2 className="visually-hidden">{card ? '3D view' : 'Engine catalog'}</h2>
+        {ready ? (
           <Suspense fallback={<p className="canvas-fallback">Loading 3D view…</p>}>
-            <EngineExperience key={engine.id} engine={engine} />
+            <EngineExperience key={ready.id} engine={ready} />
           </Suspense>
+        ) : card ? (
+          <p className="canvas-fallback">Loading 3D view…</p>
         ) : (
-          <EnginePicker engines={engines} unknown={unknown} onSelect={showEngine} />
+          <EnginePicker engines={engineCards} unknown={unknown} onSelect={showEngine} />
         )}
       </main>
       <footer className="footer">

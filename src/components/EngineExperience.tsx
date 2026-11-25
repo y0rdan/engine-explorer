@@ -92,8 +92,12 @@ export function EngineExperience({ engine }: { engine: EngineRecord }) {
     }
     const next = urlForPart(view.partId, window.location)
     const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
-    if (next !== current) history.pushState({ partId: view.partId }, '', next)
-  }, [view.partId])
+    if (next === current) return
+    const requested = readPartParam(window.location.search)
+    const missing = requested !== null && !engine.parts.some((part) => part.id === requested)
+    if (missing) window.history.replaceState({ partId: view.partId }, '', next)
+    else window.history.pushState({ partId: view.partId }, '', next)
+  }, [view.partId, engine.parts])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

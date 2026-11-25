@@ -61,7 +61,10 @@ export function SceneDriver({
     const now = state.clock.elapsedTime
     const step = Math.min(delta, 0.05)
     const root = scene.getObjectByName('engine-root')
-    if (!root) return
+    if (!root) {
+      invalidate()
+      return
+    }
     if (layoutCache.current?.id !== props.engine.id) {
       layoutCache.current = { id: props.engine.id, layout: layoutFor(props.engine) }
     }
@@ -98,18 +101,29 @@ export function SceneDriver({
         SHOWROOM_DIRECTION,
       )
       if (pose) {
-        const blend = props.reducedMotion ? 1 : 1 - Math.exp(-5 * Math.max(step, 0.016))
-        camera.position.lerp(pose.position, blend)
+        const gap = camera.position.distanceTo(pose.position)
+        const closeEnough = gap < 0.008
+        if (closeEnough || props.reducedMotion) {
+          camera.position.copy(pose.position)
+          cameraMoving = false
+        } else {
+          const blend = 1 - Math.exp(-5 * Math.max(step, 0.016))
+          camera.position.lerp(pose.position, blend)
+          cameraMoving = camera.position.distanceTo(pose.position) > 0.008
+        }
         camera.near = pose.near
         camera.far = pose.far
         camera.updateProjectionMatrix()
         if (isOrbitControls(controls)) {
-          controls.target.lerp(pose.target, blend)
+          if (closeEnough || props.reducedMotion) controls.target.copy(pose.target)
+          else {
+            const blend = 1 - Math.exp(-5 * Math.max(step, 0.016))
+            controls.target.lerp(pose.target, blend)
+          }
           controls.minDistance = pose.radius * 0.4
           controls.maxDistance = Math.max(pose.radius * 14, 4)
           controls.update()
         }
-        cameraMoving = camera.position.distanceTo(pose.position) > 0.008
         if (!cameraMoving && !props.runtime.explodePlaying && !props.runtime.assemblyPlaying) {
           fitting.current = false
         }

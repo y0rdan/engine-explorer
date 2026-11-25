@@ -7,29 +7,19 @@
   justify-content: flex-end;
 }
 
-.engine-switcher {
-  display: inline-flex;
+.engine-switcher select {
+  min-width: 5.5rem;
+  min-height: 44px;
   border: 1px solid #2a3338;
   border-radius: 999px;
-  overflow: hidden;
   background: #101418;
-}
-
-.engine-switcher button {
-  border: 0;
-  background: transparent;
-  color: #a8b0aa;
-  font: 600 0.75rem/1 system-ui, sans-serif;
-  padding: 0.35rem 0.7rem;
+  color: #f2f0ea;
+  font: 600 1rem/1 system-ui, sans-serif;
+  padding: 0 0.9rem;
   cursor: pointer;
 }
 
-.engine-switcher button[aria-pressed='true'] {
-  background: #d4843c;
-  color: #171d21;
-}
-
-.engine-switcher button:focus-visible {
+.engine-switcher select:focus-visible {
   outline: 2px solid #e0a15a;
-  outline-offset: -2px;
+  outline-offset: 2px;
 }

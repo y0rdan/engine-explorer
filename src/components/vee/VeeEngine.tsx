@@ -1,11 +1,21 @@
 import { RoundedBox } from '@react-three/drei'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
+import { BoxGeometry, CylinderGeometry, type BufferGeometry } from 'three'
 import { lobeCenter } from '../../engine/kinematics.ts'
 import type { Vec3 } from '../../engine/layout.ts'
 import type { EngineRecord } from '../../engine/schema.ts'
-import { bankFrame, layoutVee, type VeeBank, type VeeLayout } from '../../engine/veeLayout.ts'
+import { bankFrame, layoutVee, type VeeBank, type VeeCylinder, type VeeLayout } from '../../engine/veeLayout.ts'
 import { Layer, Part, Surface } from '../inline4/chrome.tsx'
-import { Bolt, Hose, Loop, Strut, XCylinder } from './primitives.tsx'
+import {
+  fanBladeGeometry,
+  Hose,
+  InstancedBoxes,
+  InstancedCylinders,
+  Loop,
+  MergedStruts,
+  mergedGeometry,
+  XCylinder,
+} from './primitives.tsx'
 
 export function VeeEngine({ engine }: { engine: EngineRecord }) {
   const layout = useMemo(() => layoutVee(engine), [engine])
@@ -68,12 +78,13 @@ function Block({ layout }: { layout: VeeLayout }) {
       <Layer id="cylinders">
         {layout.banks.map((bank) => (
           <group key={bank.id} position={[0, layout.crankCenter[1], 0]} rotation={[bank.beta, 0, 0]}>
-            {bank.cylinders.map((cylinder) => (
-              <mesh key={cylinder.number} position={[cylinder.x, layout.deck * 0.52, 0]}>
-                <cylinderGeometry args={[layout.bore / 2 + 0.004, layout.bore / 2 + 0.004, layout.deck * 0.72, 18]} />
-                <Surface kind="steel" />
-              </mesh>
-            ))}
+            <InstancedCylinders
+              places={bank.cylinders.map((cylinder) => ({
+                position: [cylinder.x, layout.deck * 0.52, 0],
+              }))}
+              args={[layout.bore / 2 + 0.004, layout.bore / 2 + 0.004, layout.deck * 0.72, 12]}
+              kind="steel"
+            />
           </group>
         ))}
       </Layer>
@@ -81,48 +92,57 @@ function Block({ layout }: { layout: VeeLayout }) {
   )
 }
 
+function CrankShaft({ layout }: { layout: VeeLayout }) {
+  const mirror = layout.cylinders.some((cylinder) => cylinder.crankMirror)
+  const geometry = useMemo(() => {
+    const parts: BufferGeometry[] = []
+    const shaft = new CylinderGeometry(0.014, 0.014, layout.block.size[0] * 0.9, 12)
+    shaft.rotateZ(Math.PI / 2)
+    parts.push(shaft)
+    for (const cylinder of layout.cylinders) {
+      const y = Math.cos(cylinder.phase) * layout.crankRadius
+      const z = (mirror ? -1 : 1) * Math.sin(cylinder.phase) * layout.crankRadius
+      const x = cylinder.x + cylinder.zSign * 0.009
+      const journal = new CylinderGeometry(0.013, 0.013, 0.02, 8)
+      journal.rotateZ(Math.PI / 2)
+      journal.translate(x, y, z)
+      parts.push(journal)
+      const web = new BoxGeometry(0.016, Math.max(Math.abs(y), 0.02) + 0.01, 0.03)
+      web.translate(cylinder.x, y / 2, z / 2)
+      parts.push(web)
+      const weight = new BoxGeometry(0.02, 0.03, 0.04)
+      weight.translate(cylinder.x, -y * 0.55, -z * 0.55)
+      parts.push(weight)
+    }
+    const pulley = new CylinderGeometry(0.055, 0.055, 0.02, 16)
+    pulley.rotateZ(Math.PI / 2)
+    pulley.translate(layout.frontX, 0, 0)
+    parts.push(pulley)
+    return mergedGeometry(parts)
+  }, [layout, mirror])
+  useEffect(() => () => geometry?.dispose(), [geometry])
+  if (!geometry) return null
+  return (
+    <mesh geometry={geometry} userData={{ spin: mirror ? -1 : 1 }}>
+      <Surface kind="steel" />
+    </mesh>
+  )
+}
+
 function Crank({ layout }: { layout: VeeLayout }) {
-  const stations = new Map<number, typeof layout.cylinders>()
-  for (const cylinder of layout.cylinders) {
-    const group = stations.get(cylinder.station) ?? []
-    group.push(cylinder)
-    stations.set(cylinder.station, group)
-  }
+  const mirror = layout.cylinders.some((cylinder) => cylinder.crankMirror)
   return (
     <Part id="crankshaft">
       <Layer id="shaft">
-        <group position={layout.crankCenter} userData={{ spin: 1 }}>
-          <XCylinder radius={0.014} length={layout.block.size[0] * 0.9} kind="steel" />
-          {[...stations.values()].map((group) => (
-            <group key={group[0]?.station}>
-              {group.map((cylinder) => {
-                const y = Math.cos(cylinder.phase) * layout.crankRadius
-                const z = Math.sin(cylinder.phase) * layout.crankRadius
-                const x = cylinder.x + cylinder.zSign * 0.009
-                return (
-                  <group key={cylinder.number}>
-                    <XCylinder radius={0.013} length={0.02} position={[x, y, z]} kind="steel" />
-                    <mesh position={[cylinder.x, y / 2, z / 2]}>
-                      <boxGeometry args={[0.016, Math.max(Math.abs(y), 0.02) + 0.01, 0.03]} />
-                      <Surface kind="steel" />
-                    </mesh>
-                    <mesh position={[cylinder.x, -y * 0.55, -z * 0.55]}>
-                      <boxGeometry args={[0.02, 0.03, 0.04]} />
-                      <Surface kind="steel" />
-                    </mesh>
-                  </group>
-                )
-              })}
-            </group>
-          ))}
-          <mesh position={[layout.frontX, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.055, 0.055, 0.02, 22]} />
-            <Surface kind="steel" />
-          </mesh>
+        <group position={layout.crankCenter}>
+          <CrankShaft layout={layout} />
         </group>
       </Layer>
       <Layer id="flywheel">
-        <group position={[layout.block.size[0] / 2 - 0.02, layout.crankCenter[1], 0]} userData={{ spin: 1 }}>
+        <group
+          position={[layout.block.size[0] / 2 - 0.02, layout.crankCenter[1], 0]}
+          userData={{ spin: mirror ? -1 : 1 }}
+        >
           <mesh rotation={[0, 0, Math.PI / 2]}>
             <cylinderGeometry args={[0.11, 0.11, 0.018, 28]} />
             <Surface kind="iron" />
@@ -138,29 +158,29 @@ function Crank({ layout }: { layout: VeeLayout }) {
 }
 
 function Pistons({ layout, bank }: { layout: VeeLayout; bank: VeeBank }) {
+  const indices = bank.cylinders.map((cylinder) => cylinder.index)
   return (
     <Part id={`pistons-${bank.id}`}>
       <Layer id="pistons">
+        <instancedMesh
+          args={[undefined, undefined, indices.length]}
+          userData={{ pistonSet: { indices, crown: layout.wristToCrown * 0.5 } }}
+        >
+          <cylinderGeometry args={[layout.bore * 0.46, layout.bore * 0.46, layout.wristToCrown + 0.02, 12]} />
+          <Surface kind="aluminum" />
+        </instancedMesh>
         {bank.cylinders.map((cylinder) => (
-          <group key={cylinder.number} userData={{ piston: cylinder.index }}>
-            <mesh position={[0, layout.wristToCrown * 0.5, 0]}>
-              <cylinderGeometry args={[layout.bore * 0.46, layout.bore * 0.46, layout.wristToCrown + 0.02, 16]} />
-              <Surface kind="aluminum" />
-            </mesh>
-            <mesh position={[0, layout.wristToCrown + 0.012, 0]} userData={{ glow: cylinder.index }}>
-              <sphereGeometry args={[0.014, 12, 8]} />
-              <meshBasicMaterial color="#ff6a2c" transparent opacity={0} depthWrite={false} />
-            </mesh>
-          </group>
+          <mesh key={cylinder.number} visible={false} userData={{ glow: cylinder.index }}>
+            <sphereGeometry args={[0.014, 8, 6]} />
+            <meshBasicMaterial color="#ff6a2c" transparent opacity={0} depthWrite={false} />
+          </mesh>
         ))}
       </Layer>
       <Layer id="rods">
-        {bank.cylinders.map((cylinder) => (
-          <mesh key={cylinder.number} userData={{ rod: cylinder.index }}>
-            <cylinderGeometry args={[0.007, 0.007, layout.rodLength, 8]} />
-            <Surface kind="steel" />
-          </mesh>
-        ))}
+        <instancedMesh args={[undefined, undefined, indices.length]} userData={{ rodSet: { indices } }}>
+          <cylinderGeometry args={[0.007, 0.007, layout.rodLength, 6]} />
+          <Surface kind="steel" />
+        </instancedMesh>
       </Layer>
     </Part>
   )
@@ -184,6 +204,38 @@ function OilPan({ layout }: { layout: VeeLayout }) {
   )
 }
 
+function boltPlaces(bank: VeeBank, layout: VeeLayout, crankY: number) {
+  return bank.cylinders.flatMap((cylinder) =>
+    [-0.03, 0.03].map((across) => ({
+      position: bankFrame(bank.beta, layout.deck + 0.07, across, cylinder.x, crankY) as Vec3,
+    })),
+  )
+}
+
+function ValveRow({
+  bank,
+  port,
+  restY,
+  localZ,
+}: {
+  bank: VeeBank
+  port: 'intake' | 'exhaust'
+  restY: number
+  localZ: number
+}) {
+  const indices = bank.cylinders.map((cylinder) => cylinder.index)
+  const xs = bank.cylinders.map((cylinder) => cylinder.x)
+  return (
+    <instancedMesh
+      args={[undefined, undefined, indices.length]}
+      userData={{ valveSet: { indices, port, restY, xs, localZ } }}
+    >
+      <cylinderGeometry args={[0.0055, 0.0055, 0.07, 6]} />
+      <Surface kind="steel" />
+    </instancedMesh>
+  )
+}
+
 function Head({ layout, bank }: { layout: VeeLayout; bank: VeeBank }) {
   const crankY = layout.crankCenter[1]
   return (
@@ -194,53 +246,40 @@ function Head({ layout, bank }: { layout: VeeLayout; bank: VeeBank }) {
             <Surface kind="aluminum" clip />
           </RoundedBox>
         </group>
-        {bank.cylinders.flatMap((cylinder) =>
-          [-0.03, 0.03].map((across) => (
-            <Bolt
-              key={`${cylinder.number}-${across}`}
-              position={bankFrame(bank.beta, layout.deck + 0.07, across, cylinder.x, crankY)}
-            />
-          )),
-        )}
+        <InstancedCylinders
+          places={boltPlaces(bank, layout, crankY)}
+          args={[0.0032, 0.0032, 0.008, 6]}
+          kind="zinc"
+        />
+        <InstancedCylinders
+          places={boltPlaces(bank, layout, crankY).map((place) => ({
+            position: [place.position[0], place.position[1] + 0.004, place.position[2]],
+          }))}
+          args={[0.007, 0.007, 0.004, 6]}
+          kind="zinc"
+        />
       </Layer>
       <Layer id="valves">
         <group position={[0, crankY, 0]} rotation={[bank.beta, 0, 0]}>
-          {bank.cylinders.map((cylinder) => (
-            <group key={cylinder.number}>
-              <mesh
-                position={[cylinder.x, layout.deck + 0.03, bank.intakeLocalZ]}
-                userData={{ valve: { index: cylinder.index, port: 'intake', restY: layout.deck + 0.03 } }}
-              >
-                <cylinderGeometry args={[0.0055, 0.0055, 0.07, 8]} />
-                <Surface kind="steel" />
-              </mesh>
-              <mesh
-                position={[cylinder.x, layout.deck + 0.03, bank.exhaustLocalZ]}
-                userData={{ valve: { index: cylinder.index, port: 'exhaust', restY: layout.deck + 0.03 } }}
-              >
-                <cylinderGeometry args={[0.0055, 0.0055, 0.07, 8]} />
-                <Surface kind="steel" />
-              </mesh>
-            </group>
-          ))}
+          <ValveRow bank={bank} port="intake" restY={layout.deck + 0.03} localZ={bank.intakeLocalZ} />
+          <ValveRow bank={bank} port="exhaust" restY={layout.deck + 0.03} localZ={bank.exhaustLocalZ} />
         </group>
       </Layer>
     </Part>
   )
 }
 
-function Lobe({ x, center }: { x: number; center: number }) {
+function lobePlaces(cylinders: readonly VeeCylinder[], port: 'intake' | 'exhaust') {
   const reach = 0.015
-  return (
-    <mesh position={[x, reach * Math.cos(center), reach * Math.sin(center)]}>
-      <sphereGeometry args={[0.011, 10, 8]} />
-      <Surface kind="steel" />
-    </mesh>
-  )
+  return cylinders.map((cylinder) => {
+    const center = lobeCenter(cylinder.fireAngle, port)
+    return { position: [cylinder.x, reach * Math.cos(center), reach * Math.sin(center)] as Vec3 }
+  })
 }
 
 function Cams({ layout, bank }: { layout: VeeLayout; bank: VeeBank }) {
   const crankY = layout.crankCenter[1]
+  const spin = bank.cylinders.some((cylinder) => cylinder.crankMirror) ? -0.5 : 0.5
   const cams = layout.dohc
     ? [
         { id: 'intake', port: 'intake' as const, z: bank.camLocalZ },
@@ -252,11 +291,16 @@ function Cams({ layout, bank }: { layout: VeeLayout; bank: VeeBank }) {
       <Layer id="shafts">
         <group position={[0, crankY, 0]} rotation={[bank.beta, 0, 0]}>
           {cams.map((cam) => (
-            <group key={cam.id} position={[0, bank.camLocalY, cam.z]} userData={{ spin: 0.5 }}>
+            <group key={cam.id} position={[0, bank.camLocalY, cam.z]} userData={{ spin }}>
               <XCylinder radius={0.009} length={bank.head.size[0] * 0.92} kind="steel" />
-              {bank.cylinders.map((cylinder) => (
-                <Lobe key={cylinder.number} x={cylinder.x} center={lobeCenter(cylinder.fireAngle, cam.port)} />
-              ))}
+              <InstancedCylinders
+                places={lobePlaces(bank.cylinders, cam.port).map((place) => ({
+                  ...place,
+                  rotation: [Math.PI / 2, 0, 0] as Vec3,
+                }))}
+                args={[0.011, 0.011, 0.022, 6]}
+                kind="steel"
+              />
             </group>
           ))}
         </group>
@@ -264,7 +308,7 @@ function Cams({ layout, bank }: { layout: VeeLayout; bank: VeeBank }) {
       <Layer id="sprockets">
         <group position={[0, crankY, 0]} rotation={[bank.beta, 0, 0]}>
           {cams.map((cam) => (
-            <group key={cam.id} position={[layout.frontX + 0.03, bank.camLocalY, cam.z]} userData={{ spin: 0.5 }}>
+            <group key={cam.id} position={[layout.frontX + 0.03, bank.camLocalY, cam.z]} userData={{ spin }}>
               <mesh rotation={[0, 0, Math.PI / 2]}>
                 <cylinderGeometry args={[0.028, 0.028, 0.01, 20]} />
                 <Surface kind="steel" />
@@ -284,7 +328,10 @@ function Timing({ layout }: { layout: VeeLayout }) {
         {layout.timingLoops.map((points, index) => (
           <Loop key={index} points={points} radius={0.006} ratio={1} />
         ))}
-        <group position={[layout.frontX + 0.02, layout.crankCenter[1], 0]} userData={{ spin: 1 }}>
+        <group
+          position={[layout.frontX + 0.02, layout.crankCenter[1], 0]}
+          userData={{ spin: layout.cylinders.some((cylinder) => cylinder.crankMirror) ? -1 : 1 }}
+        >
           <mesh rotation={[0, 0, Math.PI / 2]}>
             <cylinderGeometry args={[0.022, 0.022, 0.012, 18]} />
             <Surface kind="steel" />
@@ -320,12 +367,14 @@ function Cover({ layout, bank }: { layout: VeeLayout; bank: VeeBank }) {
           <RoundedBox args={bank.cover.size} radius={0.008} smoothness={2}>
             <Surface kind="cover" clip />
           </RoundedBox>
-          {bank.cylinders.map((cylinder) => (
-            <mesh key={cylinder.number} position={[cylinder.x, bank.cover.size[1] / 2, 0]}>
-              <boxGeometry args={[0.012, 0.01, bank.cover.size[2] * 0.7]} />
-              <Surface kind="cover" />
-            </mesh>
-          ))}
+          <InstancedCylinders
+            places={bank.cylinders.map((cylinder) => ({
+              position: [cylinder.x, bank.cover.size[1] / 2, 0] as Vec3,
+              rotation: [Math.PI / 2, 0, 0] as Vec3,
+            }))}
+            args={[0.006, 0.006, bank.cover.size[2] * 0.7, 6]}
+            kind="cover"
+          />
         </group>
       </Layer>
       <Layer id="cap">
@@ -348,13 +397,17 @@ function Intake({ layout }: { layout: VeeLayout }) {
         </RoundedBox>
       </Layer>
       <Layer id="runners">
-        {layout.banks.flatMap((bank) =>
-          bank.cylinders.map((cylinder) => {
-            const port = bankFrame(bank.beta, layout.deck + 0.02, bank.intakeLocalZ, cylinder.x, crankY)
-            const mouth: Vec3 = [cylinder.x * 0.85, layout.plenum.center[1], layout.plenum.center[2]]
-            return <Strut key={cylinder.number} from={mouth} to={port} radius={0.011} kind="plastic" clip />
-          }),
-        )}
+        <MergedStruts
+          struts={layout.banks.flatMap((bank) =>
+            bank.cylinders.map((cylinder) => ({
+              from: [cylinder.x * 0.85, layout.plenum.center[1], layout.plenum.center[2]] as Vec3,
+              to: bankFrame(bank.beta, layout.deck + 0.02, bank.intakeLocalZ, cylinder.x, crankY),
+            })),
+          )}
+          radius={0.011}
+          kind="plastic"
+          clip
+        />
       </Layer>
     </Part>
   )
@@ -370,10 +423,14 @@ function Exhaust({ layout, bank }: { layout: VeeLayout; bank: VeeBank }) {
   return (
     <Part id={`exhaust-manifold-${bank.id}`}>
       <Layer id="runners">
-        {bank.cylinders.map((cylinder) => {
-          const port = bankFrame(bank.beta, layout.deck + 0.01, bank.exhaustLocalZ, cylinder.x, crankY)
-          return <Strut key={cylinder.number} from={port} to={collector} radius={0.014} kind="iron" />
-        })}
+        <MergedStruts
+          struts={bank.cylinders.map((cylinder) => ({
+            from: bankFrame(bank.beta, layout.deck + 0.01, bank.exhaustLocalZ, cylinder.x, crankY),
+            to: collector,
+          }))}
+          radius={0.014}
+          kind="iron"
+        />
       </Layer>
       <Layer id="collector">
         <mesh position={collector} rotation={[0, 0, Math.PI / 2]}>
@@ -504,87 +561,40 @@ function Belt({ layout }: { layout: VeeLayout }) {
   )
 }
 
-function Plugs({ layout }: { layout: VeeLayout }) {
+function orientedPlaces(layout: VeeLayout, along: number) {
   const crankY = layout.crankCenter[1]
+  return layout.banks.flatMap((bank) =>
+    bank.cylinders.map((cylinder) => ({
+      position: bankFrame(bank.beta, along, 0, cylinder.x, crankY),
+      rotation: [bank.beta, 0, 0] as Vec3,
+    })),
+  )
+}
+
+function Plugs({ layout }: { layout: VeeLayout }) {
   return (
     <Part id="spark-plugs">
       <Layer id="shell">
-        {layout.banks.flatMap((bank) =>
-          bank.cylinders.map((cylinder) => (
-            <mesh
-              key={cylinder.number}
-              position={bankFrame(bank.beta, layout.deck + 0.05, 0, cylinder.x, crankY)}
-              rotation={[bank.beta, 0, 0]}
-            >
-              <cylinderGeometry args={[0.008, 0.008, 0.02, 6]} />
-              <Surface kind="zinc" />
-            </mesh>
-          )),
-        )}
+        <InstancedCylinders places={orientedPlaces(layout, layout.deck + 0.05)} args={[0.008, 0.008, 0.02, 6]} kind="zinc" />
       </Layer>
       <Layer id="insulator">
-        {layout.banks.flatMap((bank) =>
-          bank.cylinders.map((cylinder) => (
-            <mesh
-              key={cylinder.number}
-              position={bankFrame(bank.beta, layout.deck + 0.07, 0, cylinder.x, crankY)}
-              rotation={[bank.beta, 0, 0]}
-            >
-              <cylinderGeometry args={[0.005, 0.006, 0.018, 10]} />
-              <Surface kind="ceramic" />
-            </mesh>
-          )),
-        )}
+        <InstancedCylinders places={orientedPlaces(layout, layout.deck + 0.07)} args={[0.005, 0.006, 0.018, 8]} kind="ceramic" />
       </Layer>
       <Layer id="electrode">
-        {layout.banks.flatMap((bank) =>
-          bank.cylinders.map((cylinder) => (
-            <mesh
-              key={cylinder.number}
-              position={bankFrame(bank.beta, layout.deck + 0.02, 0, cylinder.x, crankY)}
-              rotation={[bank.beta, 0, 0]}
-            >
-              <cylinderGeometry args={[0.002, 0.002, 0.012, 6]} />
-              <Surface kind="zinc" />
-            </mesh>
-          )),
-        )}
+        <InstancedCylinders places={orientedPlaces(layout, layout.deck + 0.02)} args={[0.002, 0.002, 0.012, 6]} kind="zinc" />
       </Layer>
     </Part>
   )
 }
 
 function Coils({ layout }: { layout: VeeLayout }) {
-  const crankY = layout.crankCenter[1]
   return (
     <Part id="ignition-coils">
       <Layer id="body">
-        {layout.banks.flatMap((bank) =>
-          bank.cylinders.map((cylinder) => (
-            <mesh
-              key={cylinder.number}
-              position={bankFrame(bank.beta, layout.deck + 0.16, 0, cylinder.x, crankY)}
-              rotation={[bank.beta, 0, 0]}
-            >
-              <boxGeometry args={[0.026, 0.045, 0.026]} />
-              <Surface kind="plastic" />
-            </mesh>
-          )),
-        )}
+        <InstancedBoxes places={orientedPlaces(layout, layout.deck + 0.16)} args={[0.026, 0.045, 0.026]} kind="plastic" />
       </Layer>
       <Layer id="boot">
-        {layout.banks.flatMap((bank) =>
-          bank.cylinders.map((cylinder) => (
-            <mesh
-              key={cylinder.number}
-              position={bankFrame(bank.beta, layout.deck + 0.12, 0, cylinder.x, crankY)}
-              rotation={[bank.beta, 0, 0]}
-            >
-              <cylinderGeometry args={[0.008, 0.01, 0.028, 10]} />
-              <Surface kind="rubber" />
-            </mesh>
-          )),
-        )}
+        <InstancedCylinders places={orientedPlaces(layout, layout.deck + 0.12)} args={[0.008, 0.01, 0.028, 6]} kind="rubber" />
       </Layer>
     </Part>
   )
@@ -606,18 +616,50 @@ function AirBox({ layout }: { layout: VeeLayout }) {
         </mesh>
       </Layer>
       <Layer id="duct">
-        <Strut
-          from={[0, -0.02, 0]}
-          to={[
-            layout.plenum.center[0] - anchor[0],
-            layout.plenum.center[1] - anchor[1],
-            layout.plenum.center[2] - anchor[2],
+        <MergedStruts
+          struts={[
+            {
+              from: [0, -0.02, 0],
+              to: [
+                layout.plenum.center[0] - anchor[0],
+                layout.plenum.center[1] - anchor[1],
+                layout.plenum.center[2] - anchor[2],
+              ],
+            },
           ]}
           radius={0.016}
           kind="rubber"
         />
       </Layer>
     </Part>
+  )
+}
+
+function FinStack() {
+  const geometry = useMemo(() => {
+    const parts = Array.from({ length: 14 }, (_, index) => {
+      const geo = new BoxGeometry(0.02, 0.007, 0.44)
+      geo.translate(0, (index - 6.5) * 0.024, 0)
+      return geo
+    })
+    return mergedGeometry(parts)
+  }, [])
+  useEffect(() => () => geometry?.dispose(), [geometry])
+  if (!geometry) return null
+  return (
+    <mesh geometry={geometry}>
+      <Surface kind="fin" />
+    </mesh>
+  )
+}
+
+function Fan() {
+  const geometry = useMemo(() => fanBladeGeometry(), [])
+  useEffect(() => () => geometry.dispose(), [geometry])
+  return (
+    <mesh geometry={geometry} position={[0.05, 0, 0]} userData={{ spin: 1.15 }}>
+      <Surface kind="plastic" />
+    </mesh>
   )
 }
 
@@ -638,22 +680,10 @@ function Radiator({ layout }: { layout: VeeLayout }) {
         </RoundedBox>
       </Layer>
       <Layer id="core">
-        {Array.from({ length: 14 }, (_, index) => (
-          <mesh key={index} position={[0, (index - 6.5) * 0.024, 0]}>
-            <boxGeometry args={[0.02, 0.007, 0.44]} />
-            <Surface kind="fin" />
-          </mesh>
-        ))}
+        <FinStack />
       </Layer>
       <Layer id="fan">
-        <group position={[0.05, 0, 0]} userData={{ spin: 1.15 }}>
-          {Array.from({ length: 7 }, (_, index) => (
-            <mesh key={index} rotation={[(index / 7) * Math.PI * 2, 0, 0]}>
-              <boxGeometry args={[0.006, 0.15, 0.032]} />
-              <Surface kind="plastic" />
-            </mesh>
-          ))}
-        </group>
+        <Fan />
       </Layer>
       <Layer id="hoses">
         <Hose points={[[0.03, 0.2, 0], [0.16, 0.22, 0.04], upperEnd]} />

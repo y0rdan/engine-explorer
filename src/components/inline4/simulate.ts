@@ -1,5 +1,13 @@
-import { Quaternion, Vector3, type Mesh, type MeshBasicMaterial, type MeshStandardMaterial, type Object3D } from 'three'
-import type { MotionLayout, Vec3 } from '../../engine/layout.ts'
+import {
+  InstancedMesh,
+  Object3D,
+  Quaternion,
+  Vector3,
+  type Mesh,
+  type MeshBasicMaterial,
+  type MeshStandardMaterial,
+} from 'three'
+import { pistonPhaseOffset, type MotionLayout, type Vec3 } from '../../engine/layout.ts'
 import {
   combustionGlow,
   lobeCenter,
@@ -15,6 +23,24 @@ const axis = new Vector3()
 const direction = new Vector3()
 const midpoint = new Vector3()
 const spin = new Quaternion()
+const instanceDummy = new Object3D()
+
+type PistonSet = { indices: number[]; crown: number }
+type RodSet = { indices: number[] }
+type ValveSet = { indices: number[]; port: 'intake' | 'exhaust'; restY: number; xs: number[]; localZ: number }
+
+function paintInstances(mesh: InstancedMesh, count: number, place: (index: number) => void) {
+  for (let index = 0; index < count; index += 1) {
+    instanceDummy.position.set(0, 0, 0)
+    instanceDummy.quaternion.identity()
+    instanceDummy.scale.set(1, 1, 1)
+    instanceDummy.rotation.set(0, 0, 0)
+    place(index)
+    instanceDummy.updateMatrix()
+    mesh.setMatrixAt(index, instanceDummy.matrix)
+  }
+  mesh.instanceMatrix.needsUpdate = true
+}
 
 type ValveData = { index: number; port: 'intake' | 'exhaust'; restY: number }
 
@@ -61,7 +87,7 @@ export function applyPlacements(
 function wristAt(layout: MotionLayout, index: number, angle: number): Vec3 {
   const cylinder = layout.cylinders[index]
   if (!cylinder) return [0, 0, 0]
-  const travel = pistonHeight(angle, cylinder.phase - cylinder.beta, layout.crankRadius, layout.rodLength)
+  const travel = pistonHeight(angle, pistonPhaseOffset(cylinder), layout.crankRadius, layout.rodLength)
   return [
     cylinder.x + cylinder.boreAxis[0] * travel,
     layout.crankCenter[1] + cylinder.boreAxis[1] * travel,
@@ -73,10 +99,11 @@ function pinAt(layout: MotionLayout, index: number, angle: number): Vec3 {
   const cylinder = layout.cylinders[index]
   if (!cylinder) return [0, 0, 0]
   const phi = angle + cylinder.phase
+  const zSign = cylinder.crankMirror ? -1 : 1
   return [
     cylinder.journalX,
     layout.crankCenter[1] + Math.cos(phi) * layout.crankRadius,
-    layout.crankCenter[2] + Math.sin(phi) * layout.crankRadius,
+    layout.crankCenter[2] + Math.sin(phi) * layout.crankRadius * zSign,
   ]
 }
 
@@ -90,6 +117,47 @@ export function applyMotion(root: Object3D, layout: MotionLayout, runtime: Engin
       valve?: ValveData
       glow?: number
       belt?: number
+    }
+    const sets = object.userData as {
+      pistonSet?: PistonSet
+      rodSet?: RodSet
+      valveSet?: ValveSet
+    }
+    if (sets.pistonSet && object instanceof InstancedMesh) {
+      const pistonSet = sets.pistonSet
+      paintInstances(object, pistonSet.indices.length, (index) => {
+        const cylinderIndex = pistonSet.indices[index] ?? 0
+        const cylinder = layout.cylinders[cylinderIndex]
+        const wrist = wristAt(layout, cylinderIndex, angle)
+        instanceDummy.position.set(wrist[0], wrist[1], wrist[2])
+        if (cylinder) {
+          axis.set(cylinder.boreAxis[0], cylinder.boreAxis[1], cylinder.boreAxis[2])
+          instanceDummy.quaternion.copy(spin.setFromUnitVectors(up, axis))
+        }
+        instanceDummy.translateY(pistonSet.crown)
+      })
+    }
+    if (sets.rodSet && object instanceof InstancedMesh) {
+      const rodSet = sets.rodSet
+      paintInstances(object, rodSet.indices.length, (index) => {
+        const cylinderIndex = rodSet.indices[index] ?? 0
+        const pin = pinAt(layout, cylinderIndex, angle)
+        const wrist = wristAt(layout, cylinderIndex, angle)
+        direction.set(wrist[0] - pin[0], wrist[1] - pin[1], wrist[2] - pin[2])
+        const length = direction.length() || 0.001
+        direction.multiplyScalar(1 / length)
+        instanceDummy.position.set((pin[0] + wrist[0]) / 2, (pin[1] + wrist[1]) / 2, (pin[2] + wrist[2]) / 2)
+        instanceDummy.quaternion.copy(spin.setFromUnitVectors(up, direction))
+        instanceDummy.scale.set(1, length / Math.max(layout.rodLength, 0.001), 1)
+      })
+    }
+    if (sets.valveSet && object instanceof InstancedMesh) {
+      const valveSet = sets.valveSet
+      paintInstances(object, valveSet.indices.length, (index) => {
+        const fire = layout.cylinders[valveSet.indices[index] ?? 0]?.fireAngle ?? 0
+        const lift = valveLift(angle, lobeCenter(fire, valveSet.port))
+        instanceDummy.position.set(valveSet.xs[index] ?? 0, valveSet.restY - lift, valveSet.localZ)
+      })
     }
     if (typeof data.spin === 'number') object.rotation.x = angle * data.spin
     if (typeof data.piston === 'number') {

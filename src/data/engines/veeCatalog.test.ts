@@ -34,6 +34,8 @@ describe('V6 and V8 catalog entries', () => {
     expect(genericV8.layout).toBe('v8')
     expect(genericV8.displacementCc).toBe(4999)
     expect(genericV8.fastenerLayout.cylinders).toBe(8)
+    expect(genericV8.parts.find((part) => part.id === 'pistons-left')?.description).toMatch(/1, 3, 5, 7/)
+    expect(genericV8.parts.find((part) => part.id === 'pistons-right')?.description).toMatch(/2, 4, 6, 8/)
     expect(genericV8.fastenerLayout.banks).toBe(2)
   })
 

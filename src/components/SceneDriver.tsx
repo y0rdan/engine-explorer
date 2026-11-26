@@ -1,12 +1,22 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef, type MutableRefObject } from 'react'
-import { Box3, PerspectiveCamera } from 'three'
-import { type MotionLayout } from '../engine/layout.ts'
+import { Box3, PerspectiveCamera, Vector3, type Object3D } from 'three'
 import { layoutFor } from '../engine/templates.ts'
+import type { EngineLayout } from '../engine/layout.ts'
+import type { VeeLayout } from '../engine/veeLayout.ts'
 import type { EngineRecord } from '../engine/schema.ts'
 import type { EngineRuntime } from '../engine/runtime.ts'
 import { stepRuntime } from '../engine/runtime.ts'
-import { fitPose, isOrbitControls, SHOWROOM_DIRECTION } from './frameModel.ts'
+import {
+  applyShowroomPose,
+  clampCameraPlane,
+  fitPose,
+  isShowroomControls,
+  shouldRefit,
+  SHOWROOM_DIRECTION,
+  type ScreenPadding,
+} from './frameModel.ts'
+import { applyFasteners } from './inline4/fastenerMotion.ts'
 import { applyMotion, applyPlacements } from './inline4/simulate.ts'
 
 export type DriverProps = {
@@ -19,8 +29,12 @@ export type DriverProps = {
   runtime: EngineRuntime
   reducedMotion: boolean
   fitToken: number
+  fitSmooth: boolean
+  padding: ScreenPadding
   onSample: (sample: { explode: number; assembly: number }) => void
 }
+
+const EMPTY_PADDING: ScreenPadding = { top: 0, right: 0, bottom: 0, left: 0 }
 
 export function SceneDriver({
   driverRef,
@@ -34,26 +48,39 @@ export function SceneDriver({
   const controls = useThree((state) => state.controls)
   const size = useThree((state) => state.size)
   const invalidate = useThree((state) => state.invalidate)
-  const grabbed = useRef(false)
+  const userHold = useRef(false)
+  const userFramed = useRef(false)
   const token = useRef(-1)
-  const fitting = useRef(true)
   const lastSample = useRef(0)
   const box = useRef(new Box3())
-  const layoutCache = useRef<{ id: string; layout: MotionLayout } | null>(null)
+  const layoutCache = useRef<{ id: string; layout: EngineLayout | VeeLayout } | null>(null)
   const sizeKey = useRef('')
+  const paddingKey = useRef('')
+  const target = useRef(new Vector3())
 
   useEffect(() => {
     pokeRef.current = invalidate
   }, [invalidate, pokeRef])
 
   useEffect(() => {
-    if (!isOrbitControls(controls)) return
+    if (!isShowroomControls(controls)) return
     const onStart = () => {
-      grabbed.current = true
-      fitting.current = false
+      userHold.current = true
     }
-    controls.addEventListener('start', onStart)
-    return () => controls.removeEventListener('start', onStart)
+    const onControl = () => {
+      userFramed.current = true
+    }
+    const onEnd = () => {
+      userHold.current = false
+    }
+    controls.addEventListener('controlstart', onStart)
+    controls.addEventListener('control', onControl)
+    controls.addEventListener('controlend', onEnd)
+    return () => {
+      controls.removeEventListener('controlstart', onStart)
+      controls.removeEventListener('control', onControl)
+      controls.removeEventListener('controlend', onEnd)
+    }
   }, [controls])
 
   useFrame((state, delta) => {
@@ -77,72 +104,89 @@ export function SceneDriver({
       assemblyMode: props.assemblyMode,
     })
     applyMotion(root, layout, props.runtime)
+    const bobTarget = idleBob(props, now)
+    const blend = props.reducedMotion ? 1 : 1 - Math.exp(-4 * Math.max(step, 0.016))
+    root.position.y += (bobTarget - root.position.y) * blend
+    const bobbing = Math.abs(root.position.y - bobTarget) > 0.0004 || Math.abs(bobTarget) > 0.0004
+    root.updateWorldMatrix(true, true)
+    applyFasteners(root, props.engine, layout, props.runtime, {
+      partId: props.partId,
+      isolated: props.isolated,
+      assemblyMode: props.assemblyMode,
+    })
     const nextSize = `${size.width}x${size.height}`
-    if (sizeKey.current !== nextSize) {
-      sizeKey.current = nextSize
-      grabbed.current = false
-      fitting.current = true
-    }
-    if (props.fitToken !== token.current) {
-      token.current = props.fitToken
-      grabbed.current = false
-      fitting.current = true
-    }
-    if (props.runtime.explodePlaying || props.runtime.assemblyPlaying) fitting.current = true
+    const sizeChanged = sizeKey.current !== nextSize
+    if (sizeChanged) sizeKey.current = nextSize
+    const pad = props.padding
+    const nextPadding = `${pad.top}:${pad.right}:${pad.bottom}:${pad.left}`
+    const paddingChanged = paddingKey.current !== nextPadding
+    if (paddingChanged) paddingKey.current = nextPadding
+    const tokenChanged = props.fitToken !== token.current
+    if (tokenChanged) token.current = props.fitToken
+    const playing = props.runtime.explodePlaying || props.runtime.assemblyPlaying
+    if (tokenChanged || sizeChanged || paddingChanged) userFramed.current = false
     let cameraMoving = false
-    if (fitting.current && !grabbed.current && camera instanceof PerspectiveCamera) {
-      root.updateWorldMatrix(true, true)
+    if (
+      camera instanceof PerspectiveCamera &&
+      isShowroomControls(controls) &&
+      shouldRefit({
+        tokenChanged,
+        sizeChanged: sizeChanged || paddingChanged,
+        playing,
+        userHold: userHold.current,
+        userFramed: userFramed.current,
+      })
+    ) {
       const focus = focusObject(root, props)
+      focus.updateWorldMatrix(true, true)
+      box.current.setFromObject(focus)
+      if (props.partId === null) box.current.min.y -= 0.04
       const pose = fitPose(
         camera.fov,
         size.width,
         size.height,
-        box.current.setFromObject(focus),
+        box.current,
         SHOWROOM_DIRECTION,
+        1.28,
+        props.padding ?? EMPTY_PADDING,
       )
       if (pose) {
-        const gap = camera.position.distanceTo(pose.position)
-        const closeEnough = gap < 0.008
-        if (closeEnough || props.reducedMotion) {
-          camera.position.copy(pose.position)
-          cameraMoving = false
-        } else {
-          const blend = 1 - Math.exp(-5 * Math.max(step, 0.016))
-          camera.position.lerp(pose.position, blend)
-          cameraMoving = camera.position.distanceTo(pose.position) > 0.008
-        }
-        camera.near = pose.near
-        camera.far = pose.far
-        camera.updateProjectionMatrix()
-        if (isOrbitControls(controls)) {
-          if (closeEnough || props.reducedMotion) controls.target.copy(pose.target)
-          else {
-            const blend = 1 - Math.exp(-5 * Math.max(step, 0.016))
-            controls.target.lerp(pose.target, blend)
-          }
-          controls.minDistance = pose.radius * 0.4
-          controls.maxDistance = Math.max(pose.radius * 14, 4)
-          controls.update()
-        }
-        if (!cameraMoving && !props.runtime.explodePlaying && !props.runtime.assemblyPlaying) {
-          fitting.current = false
-        }
+        const smooth = props.fitSmooth && !playing && !props.reducedMotion && !sizeChanged
+        const applied = applyShowroomPose(controls, camera, pose, smooth, step)
+        target.current.copy(applied.target)
+        cameraMoving = applied.moving
       }
+    } else if (camera instanceof PerspectiveCamera && isShowroomControls(controls)) {
+      clampCameraPlane(camera, controls)
     }
-    if ((moving || cameraMoving) && now - lastSample.current > 0.12) {
+    if ((moving || cameraMoving || bobbing) && now - lastSample.current > 0.12) {
       lastSample.current = now
       props.onSample({ explode: props.runtime.explode, assembly: props.runtime.assembly })
     }
-    if (moving || cameraMoving) invalidate()
+    if (moving || cameraMoving || bobbing) invalidate()
   })
 
   return null
 }
 
-function focusObject(root: import('three').Object3D, props: DriverProps) {
+function idleBob(props: DriverProps, now: number): number {
+  if (props.reducedMotion) return 0
+  const runtime = props.runtime
+  const busy =
+    runtime.enginePlaying ||
+    runtime.explodePlaying ||
+    runtime.assemblyPlaying ||
+    props.assemblyMode ||
+    runtime.explode > 0.02 ||
+    runtime.assembly < 0.98
+  if (busy) return 0
+  return Math.sin(now * 1.5) * 0.0032
+}
+
+function focusObject(root: Object3D, props: DriverProps): Object3D {
   if (props.partId && props.layerId) {
     return root.getObjectByName(`layer:${props.partId}:${props.layerId}`) ?? root
   }
   if (props.partId) return root.getObjectByName(`part:${props.partId}`) ?? root
-  return root
+  return root.getObjectByName('powertrain') ?? root
 }

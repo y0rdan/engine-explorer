@@ -1,21 +1,24 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { activeStepIndex, assemblySteps } from '../engine/placement.ts'
-import { partById, type EngineRecord } from '../engine/schema.ts'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { engineCards } from '../data/engines/cards.ts'
+import type { EngineRecord } from '../engine/schema.ts'
+import { EngineSwitcher } from './EngineSwitcher.tsx'
+import { activeStepIndex, assemblySteps, type AssemblyDirection } from '../engine/placement.ts'
+import { partById } from '../engine/schema.ts'
 import { RPM_DEFAULT } from '../engine/kinematics.ts'
-import {
-  assemblyDuration,
-  createRuntime,
-  playAssembly,
-  playExplode,
-} from '../engine/runtime.ts'
+import { assemblyDuration, createRuntime, playAssembly, playExplode, resetExplode, writeRuntime } from '../engine/runtime.ts'
 import { readPartParam, urlForPart } from '../engine/urlState.ts'
 import { createView, viewReducer, type ViewState } from '../engine/view.ts'
+import type { ScreenPadding } from './frameModel.ts'
+import { BottomSheet } from './BottomSheet.tsx'
 import { usePrefersReducedMotion } from './usePrefersReducedMotion.ts'
-import { ControlBar } from './ControlBar.tsx'
+import { Toolbar, type Segment } from './Toolbar.tsx'
 import { EngineCanvas } from './EngineCanvas.tsx'
 import type { DriverProps } from './SceneDriver.tsx'
+import type { FastenerTip } from './inline4/Inline4Engine.tsx'
 import { PartPanel } from './PartPanel.tsx'
 import { PartsSidebar } from './PartsSidebar.tsx'
+import { dismissHint, EMPTY_HINT, GESTURE_HINT, hintDismissed } from './onboarding.ts'
+import { snapHeight, type Snap } from './sheetSnap.ts'
 
 function initialView(engineParts: { id: string }[]): ViewState {
   const requested = readPartParam(window.location.search)
@@ -23,15 +26,47 @@ function initialView(engineParts: { id: string }[]): ViewState {
   return createView(valid)
 }
 
-export function EngineExperience({ engine }: { engine: EngineRecord }) {
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(() => window.matchMedia?.('(max-width: 899px)').matches ?? false)
+  useEffect(() => {
+    const media = window.matchMedia?.('(max-width: 899px)')
+    if (!media) return
+    const onChange = () => setNarrow(media.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
+  return narrow
+}
+
+export function EngineExperience({
+  engine,
+  onEngineChange,
+}: {
+  engine: EngineRecord
+  onEngineChange?: (id: string) => void
+}) {
+  const switcher = () => (
+    <EngineSwitcher engines={engineCards} value={engine.id} onChange={(id) => onEngineChange?.(id)} />
+  )
   const reducedMotion = usePrefersReducedMotion()
-  const runtime = useRef(createRuntime())
+  const narrow = useNarrow()
+  const runtime = useState(createRuntime)[0]
   const pokeRef = useRef<() => void>(() => {})
   const [view, setView] = useState(() => initialView(engine.parts))
   const [hud, setHud] = useState({ explode: 0, assembly: 1, playing: false, rpm: RPM_DEFAULT })
   const [fitToken, setFitToken] = useState(1)
+  const [fitSmooth, setFitSmooth] = useState(true)
+  const [segment, setSegment] = useState<Segment>('explode')
+  const [direction, setDirection] = useState<AssemblyDirection>('install')
   const [drawer, setDrawer] = useState(false)
+  const [snap, setSnap] = useState<Snap>('peek')
+  const [hintOn, setHintOn] = useState(() => !hintDismissed())
+  const [tip, setTip] = useState<FastenerTip | null>(null)
+  const [viewport, setViewport] = useState({ width: 800, height: 600 })
+  const [toolbarHeight, setToolbarHeight] = useState(0)
+  const toolbarRef = useRef<HTMLDivElement>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const viewportRef = useRef<HTMLDivElement>(null)
   const historyLock = useRef(false)
   const returnFocus = useRef<HTMLElement | null>(null)
 
@@ -43,10 +78,37 @@ export function EngineExperience({ engine }: { engine: EngineRecord }) {
     pokeRef.current()
   }
 
-  function bumpFit() {
+  function bumpFit(smooth: boolean) {
+    setFitSmooth(smooth)
     setFitToken((value) => value + 1)
     poke()
   }
+
+  function publish() {
+    setHud({
+      explode: runtime.explode,
+      assembly: runtime.assembly,
+      playing: runtime.enginePlaying,
+      rpm: runtime.rpm,
+    })
+  }
+
+  function clearExplode() {
+    resetExplode(runtime)
+    publish()
+  }
+
+  const part = partById(engine, view.partId)
+  const sheet = part && narrow ? snapHeight(snap, viewport.height) : 0
+  const padding = useMemo<ScreenPadding>(
+    () => ({
+      top: 28,
+      left: 12,
+      right: part && !narrow ? 340 : 12,
+      bottom: toolbarHeight + 16 + sheet,
+    }),
+    [part, narrow, sheet, toolbarHeight],
+  )
 
   const driverRef = useRef<DriverProps>({
     engine,
@@ -55,15 +117,18 @@ export function EngineExperience({ engine }: { engine: EngineRecord }) {
     isolated: false,
     assemblyMode: false,
     cutaway: false,
-    runtime: runtime.current,
+    runtime,
     reducedMotion: false,
     fitToken: 1,
+    fitSmooth: true,
+    padding,
     onSample: (sample) => {
       setHud((current) => ({ ...current, explode: sample.explode, assembly: sample.assembly }))
     },
   })
 
   useLayoutEffect(() => {
+    driverRef.current.engine = engine
     driverRef.current.partId = view.partId
     driverRef.current.layerId = view.layerId
     driverRef.current.isolated = view.isolated
@@ -71,47 +136,90 @@ export function EngineExperience({ engine }: { engine: EngineRecord }) {
     driverRef.current.cutaway = view.cutaway
     driverRef.current.reducedMotion = reducedMotion
     driverRef.current.fitToken = fitToken
-  }, [view, reducedMotion, fitToken])
+    driverRef.current.fitSmooth = fitSmooth
+    driverRef.current.padding = padding
+  }, [view, reducedMotion, fitToken, fitSmooth, padding, engine])
+
+  useLayoutEffect(() => {
+    const node = toolbarRef.current
+    if (!node) return
+    const measure = () => setToolbarHeight(Math.ceil(node.getBoundingClientRect().height))
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [segment, narrow, part, hud.playing])
+
+  useEffect(() => {
+    const node = viewportRef.current
+    if (!node || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      setViewport({ width: node.clientWidth, height: node.clientHeight })
+    })
+    observer.observe(node)
+    setViewport({ width: node.clientWidth, height: node.clientHeight })
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     const onPop = () => {
       historyLock.current = true
       const requested = readPartParam(window.location.search)
-      const valid = requested && engine.parts.some((part) => part.id === requested) ? requested : null
+      const valid = requested && engine.parts.some((item) => item.id === requested) ? requested : null
       dispatch({ type: 'replace', partId: valid })
-      bumpFit()
+      bumpFit(true)
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [engine.parts])
 
   useEffect(() => {
+    const requested = readPartParam(window.location.search)
+    const valid = requested !== null && engine.parts.some((item) => item.id === requested)
+    if (requested && !valid) {
+      const next = urlForPart(null, window.location)
+      const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+      if (next !== current) window.history.replaceState({ partId: null }, '', next)
+      historyLock.current = false
+      return
+    }
     if (historyLock.current) {
       historyLock.current = false
       return
     }
     const next = urlForPart(view.partId, window.location)
     const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
-    if (next === current) return
-    const requested = readPartParam(window.location.search)
-    const missing = requested !== null && !engine.parts.some((part) => part.id === requested)
-    if (missing) window.history.replaceState({ partId: view.partId }, '', next)
-    else window.history.pushState({ partId: view.partId }, '', next)
+    if (next !== current) window.history.pushState({ partId: view.partId }, '', next)
   }, [view.partId, engine.parts])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       if (dialogRef.current?.open) return
+      if (tip) {
+        event.preventDefault()
+        setTip(null)
+        return
+      }
       if (view.partId) {
         event.preventDefault()
+        resetExplode(runtime)
+        setHud({
+          explode: runtime.explode,
+          assembly: runtime.assembly,
+          playing: runtime.enginePlaying,
+          rpm: runtime.rpm,
+        })
         dispatch({ type: 'clear' })
-        bumpFit()
+        setFitSmooth(true)
+        setFitToken((value) => value + 1)
+        pokeRef.current()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [view.partId])
+  }, [view.partId, tip, runtime])
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -125,38 +233,99 @@ export function EngineExperience({ engine }: { engine: EngineRecord }) {
     returnFocus.current?.focus()
   }, [view.partId])
 
-  const part = partById(engine, view.partId)
   const steps = assemblySteps(engine, view.partId, view.assemblyMode && view.isolated)
-  const assemblyPartId = view.assemblyMode
-    ? (steps[activeStepIndex(hud.assembly, steps.length)]?.partId ?? null)
-    : null
-
-  function publish() {
-    const motion = runtime.current
-    setHud({
-      explode: motion.explode,
-      assembly: motion.assembly,
-      playing: motion.enginePlaying,
-      rpm: motion.rpm,
-    })
-  }
+  const assemblyPartId = view.assemblyMode ? (steps[activeStepIndex(hud.assembly, steps.length)]?.partId ?? null) : null
 
   function selectPart(id: string) {
     if (document.activeElement instanceof HTMLElement) returnFocus.current = document.activeElement
+    clearExplode()
     dispatch({ type: 'select-part', id })
-    bumpFit()
+    setSnap('peek')
+    setTip(null)
+    bumpFit(true)
   }
 
+  function chooseSegment(next: Segment) {
+    writeRuntime(runtime, { assemblyPlaying: false, explodePlaying: false, enginePlaying: false })
+    if (next === 'assembly') {
+      if (!view.assemblyMode) writeRuntime(runtime, { assembly: runtime.explode > 0.5 ? 0 : 1 })
+      writeRuntime(runtime, { cutaway: false })
+      dispatch({ type: 'cutaway', on: false })
+      dispatch({ type: 'assembly', on: true })
+      setDirection('install')
+    } else {
+      dispatch({ type: 'assembly', on: false })
+      const cutaway = next === 'section'
+      writeRuntime(runtime, { cutaway, ...(next === 'run' ? { explode: 0 } : {}) })
+      dispatch({ type: 'cutaway', on: cutaway })
+    }
+    setSegment(next)
+    publish()
+    bumpFit(true)
+  }
+
+  const guide = part ? (
+    <PartPanel
+      part={part}
+      layerId={view.layerId}
+      isolated={view.isolated}
+      onClose={() => {
+        clearExplode()
+        dispatch({ type: 'clear' })
+        bumpFit(true)
+      }}
+      onSelectLayer={(layerId) => {
+        dispatch({ type: 'select-layer', partId: part.id, layerId })
+        bumpFit(true)
+      }}
+      onIsolate={() => {
+        dispatch({ type: 'isolate' })
+        bumpFit(true)
+      }}
+    />
+  ) : null
+
   return (
-    <div className={part ? 'experience has-part' : 'experience'}>
+    <div className="experience">
       <aside className="sidebar">
         <PartsSidebar parts={engine.parts} selectedId={view.partId} onSelect={selectPart} idPrefix="side" />
       </aside>
       <div className="viewport-column">
-        <div className="viewport">
+        <div className="viewport" ref={viewportRef} style={{ '--sheet': `${sheet}px` } as CSSProperties}>
           <p className="visually-hidden" aria-live="polite">
             {part ? `${part.displayName} selected` : 'Full engine'}
           </p>
+          {!part && <p className="empty-hint">{EMPTY_HINT}</p>}
+          {hintOn && (
+            <p className="gesture-hint">
+              <span>{GESTURE_HINT}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  dismissHint()
+                  setHintOn(false)
+                }}
+              >
+                Got it
+              </button>
+            </p>
+          )}
+          {tip && (
+            <div className="fastener-tip" role="tooltip" style={{ left: tip.x, top: tip.y, transform: 'none' }}>
+              <p>
+                <strong>
+                  {tip.count} × {tip.size} {tip.name}
+                </strong>
+              </p>
+              <p>
+                {tip.torqueMin}–{tip.torqueMax} N·m{tip.torqueAngle ? ` + ${tip.torqueAngle}°` : ''}
+              </p>
+              <p className="torque-note">Typical range — always check your engine&apos;s service manual.</p>
+              <button type="button" onClick={() => setTip(null)}>
+                Close
+              </button>
+            </div>
+          )}
           <EngineCanvas
             driverRef={driverRef}
             pokeRef={pokeRef}
@@ -168,108 +337,89 @@ export function EngineExperience({ engine }: { engine: EngineRecord }) {
             assemblyPartId={assemblyPartId}
             cutaway={view.cutaway}
             onClear={() => {
+              clearExplode()
               dispatch({ type: 'clear' })
-              bumpFit()
+              bumpFit(true)
             }}
             onSelectPart={selectPart}
             onSelectLayer={(partId, layerId) => {
               dispatch({ type: 'select-layer', partId, layerId })
-              bumpFit()
+              bumpFit(true)
             }}
             onHover={(id) => dispatch({ type: 'hover', id })}
+            onFastener={setTip}
+          />
+          {part && !narrow && <div className="guide-card">{guide}</div>}
+          {part && narrow && (
+            <BottomSheet snap={snap} viewportHeight={viewport.height || window.innerHeight} onSnap={setSnap}>
+              {switcher()}
+              {guide}
+            </BottomSheet>
+          )}
+          <Toolbar
+            ref={toolbarRef}
+            engine={engine}
+            segment={segment}
+            rpm={hud.rpm}
+            partId={view.partId}
+            isolated={view.isolated}
+            playing={hud.playing}
+            explode={hud.explode}
+            assembly={hud.assembly}
+            direction={direction}
+            narrow={narrow}
+            switcher={switcher()}
+            onSegment={chooseSegment}
+            onExplode={(value) => {
+              writeRuntime(runtime, { explodePlaying: false, explode: value })
+              if (view.assemblyMode) dispatch({ type: 'assembly', on: false })
+              publish()
+              bumpFit(false)
+            }}
+            onPlayExplode={() => {
+              playExplode(runtime, reducedMotion)
+              publish()
+              bumpFit(false)
+            }}
+            onAssembly={(value) => {
+              writeRuntime(runtime, { assemblyPlaying: false, assembly: value })
+              publish()
+              bumpFit(false)
+            }}
+            onStep={(step) => {
+              const index = activeStepIndex(hud.assembly, steps.length)
+              const next = Math.min(steps.length, Math.max(0, index + step))
+              writeRuntime(runtime, { assemblyPlaying: false, assembly: steps.length === 0 ? 1 : next / steps.length })
+              setDirection(step < 0 ? 'remove' : 'install')
+              publish()
+              bumpFit(false)
+            }}
+            onPlayAssembly={() => {
+              setDirection('install')
+              playAssembly(runtime, 1, assemblyDuration(steps.length), reducedMotion)
+              publish()
+              bumpFit(false)
+            }}
+            onPlayTeardown={() => {
+              setDirection('remove')
+              playAssembly(runtime, 0, assemblyDuration(steps.length), reducedMotion)
+              publish()
+              bumpFit(false)
+            }}
+            onTogglePlay={() => {
+              writeRuntime(runtime, { enginePlaying: !runtime.enginePlaying })
+              publish()
+              poke()
+            }}
+            onRpm={(rpm) => {
+              writeRuntime(runtime, { rpm })
+              publish()
+            }}
+            onResetView={() => bumpFit(true)}
+            onOpenParts={() => setDrawer(true)}
           />
         </div>
-        <ControlBar
-          engine={engine}
-          rpm={hud.rpm}
-          partId={view.partId}
-          isolated={view.isolated}
-          assemblyMode={view.assemblyMode}
-          cutaway={view.cutaway}
-          playing={hud.playing}
-          explode={hud.explode}
-          assembly={hud.assembly}
-          onExplode={(value) => {
-            runtime.current.explodePlaying = false
-            runtime.current.explode = value
-            if (view.assemblyMode) dispatch({ type: 'assembly', on: false })
-            publish()
-            bumpFit()
-          }}
-          onPlayExplode={() => {
-            playExplode(runtime.current, performance.now() / 1000, reducedMotion)
-            publish()
-            bumpFit()
-          }}
-          onAssemblyMode={(on) => {
-            runtime.current.assemblyPlaying = false
-            runtime.current.explodePlaying = false
-            if (on) runtime.current.assembly = runtime.current.explode > 0.5 ? 0 : 1
-            dispatch({ type: 'assembly', on })
-            publish()
-            bumpFit()
-          }}
-          onAssembly={(value) => {
-            runtime.current.assemblyPlaying = false
-            runtime.current.assembly = value
-            publish()
-            bumpFit()
-          }}
-          onStep={(direction) => {
-            const index = activeStepIndex(hud.assembly, steps.length)
-            const next = Math.min(steps.length, Math.max(0, index + direction))
-            runtime.current.assemblyPlaying = false
-            runtime.current.assembly = steps.length === 0 ? 1 : next / steps.length
-            publish()
-            bumpFit()
-          }}
-          onPlayAssembly={() => {
-            playAssembly(runtime.current, performance.now() / 1000, 1, assemblyDuration(steps.length), reducedMotion)
-            publish()
-            bumpFit()
-          }}
-          onPlayTeardown={() => {
-            playAssembly(runtime.current, performance.now() / 1000, 0, assemblyDuration(steps.length), reducedMotion)
-            publish()
-            bumpFit()
-          }}
-          onTogglePlay={() => {
-            runtime.current.enginePlaying = !runtime.current.enginePlaying
-            publish()
-            poke()
-          }}
-          onRpm={(rpm) => {
-            runtime.current.rpm = rpm
-            publish()
-          }}
-          onCutaway={(on) => {
-            runtime.current.cutaway = on
-            dispatch({ type: 'cutaway', on })
-            poke()
-          }}
-          onResetView={bumpFit}
-          onOpenParts={() => setDrawer(true)}
-        />
       </div>
-      {part && (
-        <PartPanel
-          part={part}
-          layerId={view.layerId}
-          isolated={view.isolated}
-          onClose={() => {
-            dispatch({ type: 'clear' })
-            bumpFit()
-          }}
-          onSelectLayer={(layerId) => {
-            dispatch({ type: 'select-layer', partId: part.id, layerId })
-            bumpFit()
-          }}
-          onIsolate={() => {
-            dispatch({ type: 'isolate' })
-            bumpFit()
-          }}
-        />
-      )}
       <dialog
         ref={dialogRef}
         className="parts-drawer"

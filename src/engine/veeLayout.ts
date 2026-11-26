@@ -1,5 +1,5 @@
 import { beltLoop, type CylinderMotion, type MotionLayout } from './layout.ts'
-import type { EngineRecord, ParamValue, Vec3 } from './schema.ts'
+import type { EngineRecord, Vec3 } from './schema.ts'
 
 const TWO_PI = Math.PI * 2
 export const VEE_CRANK_Y = 0.035 + 0.058 + 0.075
@@ -190,30 +190,6 @@ export function throwCenters(cylinders: readonly VeeCylinder[]): number[] {
   })
 }
 
-function numberParam(params: Record<string, ParamValue>, key: string): number {
-  const value = params[key]
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new Error(`procedural params.${key} must be a number`)
-  }
-  return value
-}
-
-function booleanParam(params: Record<string, ParamValue>, key: string): boolean {
-  const value = params[key]
-  if (typeof value !== 'boolean') throw new Error(`procedural params.${key} must be a boolean`)
-  return value
-}
-
-function firingOrderParam(params: Record<string, ParamValue>): number[] {
-  const value = params.firingOrder
-  if (typeof value !== 'string') throw new Error('procedural params.firingOrder must be a string')
-  const order = value.split('-').map((part) => Number(part))
-  if (order.some((cylinder) => !Number.isInteger(cylinder))) {
-    throw new Error('procedural params.firingOrder must look like 1-2-3-4-5-6')
-  }
-  return order
-}
-
 export function bankFrame(beta: number, along: number, across: number, x = 0, crankY = 0): Vec3 {
   const axis = boreAxisFor(beta)
   return [
@@ -223,25 +199,29 @@ export function bankFrame(beta: number, along: number, across: number, x = 0, cr
   ]
 }
 
+const VEE_PROFILE = {
+  v6: { bankAngleDeg: 60, bore: 0.094, stroke: 0.084, firingOrder: V6_FIRING_ORDER },
+  v8: { bankAngleDeg: 90, bore: 0.092, stroke: 0.094, firingOrder: V8_FIRING_ORDER },
+} as const
+
 export function layoutVee(engine: EngineRecord): VeeLayout {
-  if (engine.source.kind !== 'procedural') throw new Error(`${engine.id} is not a procedural engine`)
-  const params = engine.source.params
-  const bankAngleDeg = numberParam(params, 'bankAngleDeg')
-  const bore = numberParam(params, 'bore')
-  const stroke = numberParam(params, 'stroke')
-  const cylindersPerBank = numberParam(params, 'cylindersPerBank')
-  const banks = numberParam(params, 'banks')
-  const dohc = booleanParam(params, 'dohc')
-  if (banks !== 2) throw new Error('the V template expects 2 banks')
+  const profile = engine.layout === 'v8' ? VEE_PROFILE.v8 : VEE_PROFILE.v6
+  const configuration = engine.parameters.configuration
+  const bankAngleDeg = profile.bankAngleDeg
+  const bore = profile.bore
+  const stroke = profile.stroke
+  const cylindersPerBank = configuration.cylinders / configuration.banks
+  const dohc = configuration.valvetrain === 'dohc'
+  if (configuration.banks !== 2) throw new Error('the V template expects 2 banks')
   if (!Number.isInteger(cylindersPerBank) || cylindersPerBank < 2) {
-    throw new Error('cylindersPerBank must be an integer of at least 2')
+    throw new Error('cylinders per bank must be an integer of at least 2')
   }
   const { boreSpacing, block, intakeSide, accessories } = engine.parameters
   const cylinders = planVee({
     bankAngleDeg,
     cylindersPerBank,
     boreSpacing,
-    firingOrder: firingOrderParam(params),
+    firingOrder: profile.firingOrder,
   })
   const crankRadius = stroke / 2
   const wristToCrown = 0.028

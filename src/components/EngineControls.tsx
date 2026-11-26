@@ -1,34 +1,34 @@
-import { OrbitControls } from '@react-three/drei'
+import { CameraControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import { bindOrbitKeys } from './orbitKeys.ts'
+import type CameraControlsImpl from 'camera-controls'
+import { bindCameraKeys } from './cameraKeys.ts'
 import { usePrefersReducedMotion } from './usePrefersReducedMotion.ts'
 
-export function EngineControls({ damping }: { damping?: boolean }) {
+export function EngineControls() {
   const gl = useThree((state) => state.gl)
   const reducedMotion = usePrefersReducedMotion()
-  const controls = useRef<OrbitControlsImpl>(null)
-  const damp = damping ?? !reducedMotion
+  const controls = useRef<CameraControlsImpl>(null)
 
   useEffect(() => {
-    const orbit = controls.current
-    if (orbit === null) return
-    // Runs after OrbitControls' own effect, which connects and disposes when
-    // its element changes. Passing domElement keeps that element stable so
-    // dispose does not run again and drop this key listener.
-    return bindOrbitKeys(orbit, gl.domElement)
+    const current = controls.current
+    if (current === null) return
+    return bindCameraKeys(current, gl.domElement)
   }, [gl])
 
   return (
-    <OrbitControls
+    <CameraControls
       ref={controls}
-      domElement={gl.domElement}
       makeDefault
-      enableDamping={damp}
-      dampingFactor={0.08}
-      enablePan
-      maxPolarAngle={Math.PI / 2 - 0.05}
+      smoothTime={reducedMotion ? 0 : 0.42}
+      draggingSmoothTime={0.12}
+      dollySpeed={0.45}
+      azimuthRotateSpeed={0.55}
+      polarRotateSpeed={0.45}
+      minPolarAngle={0.18}
+      maxPolarAngle={Math.PI / 2 - 0.08}
+      infinityDolly={false}
+      restThreshold={0.002}
     />
   )
 }

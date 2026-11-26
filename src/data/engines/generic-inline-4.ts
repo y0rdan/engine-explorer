@@ -2,7 +2,9 @@
 // A later file such as toyota-2zr-fe.ts can use the same fields. Do not put
 // unverified brand repair claims in those files.
 
-export const genericInline4Data = {
+import { withInline4Fasteners } from './inline4-fasteners.ts'
+
+const genericInline4Base = {
   id: 'generic-inline-4',
   brand: 'Generic',
   model: 'Inline-4',
@@ -10,38 +12,12 @@ export const genericInline4Data = {
   yearRange: { start: 2000, end: null },
   layout: 'inline-4',
   displacementCc: 1998,
-  category: 'engine',
-  specs: [
-    { label: 'Cylinders', value: '4', unit: 'in a row' },
-    { label: 'Bore', value: '86', unit: 'mm' },
-    { label: 'Stroke', value: '86', unit: 'mm' },
-    { label: 'Valvetrain', value: 'SOHC' },
-    { label: 'Firing order', value: '1-3-4-2' },
-  ],
-  source: {
-    kind: 'procedural',
-    template: 'inline-4',
-    params: {
-      bankAngleDeg: 0,
-      bore: 0.086,
-      stroke: 0.086,
-      cylindersPerBank: 4,
-      banks: 1,
-      dohc: false,
-      firingOrder: '1-3-4-2',
-    },
-  },
-  fastenerLayout: {
-    cylinders: 4,
-    banks: 1,
-    heads: 1,
-    valvetrain: 'sohc',
-  },
   parameters: {
     boreSpacing: 0.096,
     block: { length: 0.46, width: 0.2, height: 0.3 },
     intakeSide: 'right',
     exhaustSide: 'left',
+    configuration: { cylinders: 4, banks: 1, heads: 1, valvetrain: 'dohc' },
     accessories: {
       'water-pump': [-0.27, 0.26, 0.02],
       alternator: [-0.28, 0.32, 0.14],
@@ -1318,3 +1294,5 @@ export const genericInline4Data = {
     },
   ],
 }
+
+export const genericInline4Data = withInline4Fasteners(genericInline4Base)

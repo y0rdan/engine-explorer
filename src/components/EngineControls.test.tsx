@@ -6,6 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { EngineControls } from './EngineControls.tsx'
 import { bindOrbitKeys } from './orbitKeys.ts'
 
+type KeyApi = {
+  truck: (x: number, y: number, enableTransition?: boolean) => void
+  update: (delta: number) => void
+}
+
 const harness = vi.hoisted(() => {
   const canvas = document.createElement('canvas')
   canvas.tabIndex = 0
@@ -35,34 +40,23 @@ vi.mock('@react-three/fiber', () => ({
 // Mirrors drei: connect on the resolved element, and dispose() on cleanup,
 // which drops a key listener bound before that reconnect.
 vi.mock('@react-three/drei', () => {
-  const OrbitControls = forwardRef(function OrbitControls(
-    props: { domElement?: HTMLElement },
-    ref: Ref<OrbitControlsImpl>,
-  ) {
-    const { store } = harness
-    const element = props.domElement || store.events.connected || store.gl.domElement
-    const controls = useMemo(() => new OrbitControlsImpl(store.camera), [store.camera])
-
+  const CameraControls = forwardRef(function CameraControls(_props: unknown, ref: Ref<KeyApi>) {
+    const api = useMemo<KeyApi>(
+      () => ({
+        truck(x: number) {
+          harness.store.camera.position.x += x
+        },
+        update() {},
+      }),
+      [],
+    )
     useEffect(() => {
-      controls.connect(element)
-      return () => {
-        controls.dispose()
-      }
-    }, [controls, element])
-
-    useEffect(() => {
-      if (typeof ref === 'function') ref(controls)
-      else if (ref !== null) ref.current = controls
-      return () => {
-        if (typeof ref === 'function') ref(null)
-        else if (ref !== null) ref.current = null
-      }
-    }, [controls, ref])
-
+      if (typeof ref === 'function') ref(api)
+      else if (ref !== null) ref.current = api
+    }, [api, ref])
     return null
   })
-
-  return { OrbitControls }
+  return { CameraControls }
 })
 
 function pressArrowRight(): void {
@@ -87,16 +81,10 @@ describe('EngineControls arrow keys', () => {
     document.body.replaceChildren(harness.canvas)
   })
 
-  it('pans the camera when ArrowRight is pressed after the controls element resolves', () => {
-    const { rerender } = render(<EngineControls />)
+  it('pans the camera when ArrowRight is pressed', () => {
+    render(<EngineControls />)
     const before = harness.store.camera.position.clone()
-
-    // drei reconnects when events.connected appears. A stable domElement
-    // keeps dispose() from running and dropping the key listener.
-    harness.store.events.connected = document.createElement('div')
-    rerender(<EngineControls />)
     pressArrowRight()
-
     expect(harness.store.camera.position.distanceTo(before)).toBeGreaterThan(0)
   })
 })

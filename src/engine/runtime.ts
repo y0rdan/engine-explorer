@@ -8,12 +8,12 @@ export type EngineRuntime = {
   explode: number
   explodeFrom: number
   explodeTo: number
-  explodePlayStart: number
+  explodePlayStart: number | null
   explodePlaying: boolean
   assembly: number
   assemblyFrom: number
   assemblyTo: number
-  assemblyPlayStart: number
+  assemblyPlayStart: number | null
   assemblyPlaying: boolean
   assemblyDuration: number
   enginePlaying: boolean
@@ -28,12 +28,12 @@ export function createRuntime(): EngineRuntime {
     explode: 0,
     explodeFrom: 0,
     explodeTo: 0,
-    explodePlayStart: 0,
+    explodePlayStart: null,
     explodePlaying: false,
     assembly: 1,
     assemblyFrom: 1,
     assemblyTo: 1,
-    assemblyPlayStart: 0,
+    assemblyPlayStart: null,
     assemblyPlaying: false,
     assemblyDuration: 8,
     enginePlaying: false,
@@ -57,6 +57,7 @@ export function stepRuntime(runtime: EngineRuntime, now: number, delta: number):
     moving = true
   }
   if (runtime.explodePlaying) {
+    if (runtime.explodePlayStart === null) runtime.explodePlayStart = now
     const span = Math.max(EXPLODE_PLAY_SECONDS, 0.01)
     const u = Math.min(1, (now - runtime.explodePlayStart) / span)
     runtime.explode = runtime.explodeFrom + (runtime.explodeTo - runtime.explodeFrom) * easeNearLinear(u)
@@ -64,6 +65,7 @@ export function stepRuntime(runtime: EngineRuntime, now: number, delta: number):
     else moving = true
   }
   if (runtime.assemblyPlaying) {
+    if (runtime.assemblyPlayStart === null) runtime.assemblyPlayStart = now
     const span = Math.max(runtime.assemblyDuration, 0.01)
     const u = Math.min(1, (now - runtime.assemblyPlayStart) / span)
     runtime.assembly = runtime.assemblyFrom + (runtime.assemblyTo - runtime.assemblyFrom) * easeNearLinear(u)
@@ -77,22 +79,22 @@ export function stepRuntime(runtime: EngineRuntime, now: number, delta: number):
   return moving
 }
 
-export function playExplode(runtime: EngineRuntime, now: number, reducedMotion: boolean): void {
+export function playExplode(runtime: EngineRuntime, reducedMotion: boolean): void {
   const to = runtime.explode < 0.985 ? 1 : 0
   runtime.explodePlaying = false
   if (reducedMotion || Math.abs(runtime.explode - to) < 0.001) {
     runtime.explode = to
+    runtime.explodePlayStart = null
     return
   }
   runtime.explodeFrom = runtime.explode
   runtime.explodeTo = to
-  runtime.explodePlayStart = now
+  runtime.explodePlayStart = null
   runtime.explodePlaying = true
 }
 
 export function playAssembly(
   runtime: EngineRuntime,
-  now: number,
   to: number,
   duration: number,
   reducedMotion: boolean,
@@ -101,15 +103,24 @@ export function playAssembly(
   if (Math.abs(runtime.assembly - to) < 0.001) runtime.assembly = to === 1 ? 0 : 1
   if (reducedMotion) {
     runtime.assembly = to
+    runtime.assemblyPlayStart = null
     return
   }
   runtime.assemblyFrom = runtime.assembly
   runtime.assemblyTo = to
-  runtime.assemblyPlayStart = now
+  runtime.assemblyPlayStart = null
   runtime.assemblyDuration = duration
   runtime.assemblyPlaying = true
 }
 
 export function assemblyDuration(stepCount: number): number {
   return Math.max(2.8, stepCount * 0.55)
+}
+
+export function writeRuntime(runtime: EngineRuntime, patch: Partial<EngineRuntime>): void {
+  Object.assign(runtime, patch)
+}
+
+export function resetExplode(runtime: EngineRuntime): void {
+  writeRuntime(runtime, { explode: 0, explodePlaying: false })
 }

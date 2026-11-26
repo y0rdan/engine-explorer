@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { categoriesIn, filterCards, layoutsIn, type EngineCard } from '../data/engines/cards.ts'
-import { CATEGORY_LABELS, formatDisplacement, layoutLabel, type CategoryId } from '../engine/schema.ts'
+import { formatDisplacement, layoutLabel } from '../engine/schema.ts'
+
+const CATEGORY_LABELS: Record<string, string> = { engine: 'Engines' }
 import './EnginePicker.css'
 
 export function EnginePicker({
@@ -48,7 +50,7 @@ export function EnginePicker({
                 setLayout(null)
               }}
             >
-              {CATEGORY_LABELS[id as CategoryId] ?? id}
+              {CATEGORY_LABELS[id] ?? id}
             </button>
           ))}
         </div>

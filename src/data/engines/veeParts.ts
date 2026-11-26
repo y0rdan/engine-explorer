@@ -36,9 +36,13 @@ type LayerInput = {
 }
 
 type FastenerInput = {
-  type: string
+  id: string
+  name: string
+  type: 'bolt' | 'nut' | 'stud' | 'screw'
   size: string
   positions: Vec3[]
+  axis?: Vec3
+  anchors?: string[] | null
   torque: { min: number; max: number; angle?: number }
   notes: string
   spiral?: boolean
@@ -71,13 +75,17 @@ function spiralSequence(positions: Vec3[]): number[] {
 function fastener(input: FastenerInput) {
   const sequence = input.spiral ? spiralSequence(input.positions) : input.positions.map((_, index) => index + 1)
   return {
+    id: input.id,
     type: input.type,
     size: input.size,
+    name: input.name,
     count: input.positions.length,
     positions: input.positions,
-    torque_nm: input.torque,
+    axis: input.axis ?? [0, 1, 0],
+    torqueNm: input.torque,
     sequence,
     notes: `${input.notes} Typical, display only.`,
+    anchors: input.anchors ?? null,
   }
 }
 
@@ -191,40 +199,17 @@ export function buildVeeEngine(spec: VeeEngineSpec) {
     yearRange: { start: 2000, end: null },
     layout: spec.layout,
     displacementCc: spec.displacementCc,
-    category: 'engine',
-    specs: [
-      { label: 'Cylinders', value: String(spec.cylindersPerBank * 2) },
-      { label: 'Banks', value: '2' },
-      { label: 'Bank angle', value: String(spec.bankAngleDeg), unit: 'deg' },
-      { label: 'Bore', value: String(spec.boreMm), unit: 'mm' },
-      { label: 'Stroke', value: String(spec.strokeMm), unit: 'mm' },
-      { label: 'Valvetrain', value: 'DOHC, 2 valves per cylinder' },
-      { label: 'Firing order', value: spec.firingLabel },
-    ],
-    source: {
-      kind: 'procedural',
-      template: spec.layout,
-      params: {
-        bankAngleDeg: spec.bankAngleDeg,
-        bore: spec.boreM,
-        stroke: spec.strokeM,
-        cylindersPerBank: spec.cylindersPerBank,
-        banks: 2,
-        dohc: true,
-        firingOrder: spec.firingLabel,
-      },
-    },
-    fastenerLayout: {
-      cylinders: spec.cylindersPerBank * 2,
-      banks: 2,
-      heads: 2,
-      valvetrain: 'dohc',
-    },
     parameters: {
       boreSpacing: spec.boreSpacing,
       block: spec.block,
       intakeSide: 'right',
       exhaustSide: 'left',
+      configuration: {
+        cylinders: spec.cylindersPerBank * 2,
+        banks: 2,
+        heads: 2,
+        valvetrain: 'dohc',
+      },
       accessories: {},
     },
     parts: [
@@ -272,6 +257,8 @@ export function buildVeeEngine(spec: VeeEngineSpec) {
         ],
         fasteners: [
           fastener({
+            id: 'main-caps',
+            name: 'Main cap bolts',
             type: 'bolt',
             size: 'M11',
             positions: mainCapPositions(spec.mainCaps, spec.boreSpacing, VEE_CRANK_Y - 0.03, 0.016),
@@ -279,8 +266,11 @@ export function buildVeeEngine(spec: VeeEngineSpec) {
             notes: `${spec.mainCaps} main caps, two vertical bolts on each cap.`,
           }),
           fastener({
+            id: 'main-side-bolts',
+            name: 'Main side bolts',
             type: 'bolt',
             size: 'M8',
+            axis: [0, 0, 1],
             positions: mainCapPositions(spec.mainCaps, spec.boreSpacing, VEE_CRANK_Y - 0.05, 0.055),
             torque: { min: 20, max: 30 },
             notes: `Side bolts, two beside each of the ${spec.mainCaps} main caps.`,
@@ -375,6 +365,8 @@ export function buildVeeEngine(spec: VeeEngineSpec) {
         ],
         fasteners: [
           fastener({
+            id: 'pan-bolts',
+            name: 'Oil pan bolts',
             type: 'bolt',
             size: 'M6',
             positions: panPositions(spec.panBolts, spec.block.length * 0.8, spec.block.width * 0.8, 0.09),
@@ -432,6 +424,8 @@ export function buildVeeEngine(spec: VeeEngineSpec) {
         ],
         fasteners: [
           fastener({
+            id: 'timing-cover',
+            name: 'Timing cover bolts',
             type: 'bolt',
             size: 'M6',
             positions: coverRing(8, -spec.block.length / 2 - 0.06, VEE_CRANK_Y + 0.12),
@@ -484,6 +478,8 @@ export function buildVeeEngine(spec: VeeEngineSpec) {
         ],
         fasteners: [
           fastener({
+            id: 'intake-bolts',
+            name: 'Valley intake bolts',
             type: 'bolt',
             size: 'M8',
             positions: valleyGrid(spec.intakeBolts, spec.boreSpacing * 0.85, VEE_CRANK_Y + 0.16),
@@ -552,9 +548,12 @@ function pistonPart(
     ],
     fasteners: [
       fastener({
+        id: 'rod-bolts',
+        name: 'Rod bolts',
         type: 'bolt',
         size: 'M8',
         positions: rodPositions(group),
+        anchors: group.flatMap((cylinder) => [`rod:${cylinder.index}`, `rod:${cylinder.index}`]),
         torque: { min: 30, max: 50, angle: 45 },
         notes: `Two rod bolts on each ${side}-bank rod.`,
       }),
@@ -616,8 +615,11 @@ function headPart(
     ],
     fasteners: [
       fastener({
+        id: 'head-bolts',
+        name: 'Head bolts',
         type: 'bolt',
         size: 'M11',
+        axis,
         positions: gridAlong(beta, 0.38, [-0.04, 0.04], spec.headBolts, spec.boreSpacing * 0.72),
         torque,
         notes: `${spec.headBolts} head bolts in a center-out spiral.`,
@@ -716,8 +718,11 @@ function coverPart(side: 'left' | 'right', axis: Vec3, beta: number, spec: VeeEn
     ],
     fasteners: [
       fastener({
+        id: 'cover-bolts',
+        name: 'Valve cover bolts',
         type: 'bolt',
         size: 'M6',
+        axis,
         positions: gridAlong(beta, 0.5, [-0.035, 0.035], spec.coverBolts, spec.boreSpacing * 0.7),
         torque: { min: 8, max: 12 },
         notes: `${spec.coverBolts} valve-cover bolts, M6.`,
@@ -780,8 +785,11 @@ function exhaustPart(
     ],
     fasteners: [
       fastener({
+        id: 'exhaust-nuts',
+        name: 'Exhaust nuts',
         type: 'nut',
         size: 'M8',
+        axis,
         positions: gridAlong(beta, 0.32, [zSign * 0.09], spec.exhaustNuts, spec.boreSpacing * 0.55),
         torque: { min: 20, max: 30 },
         notes: `${spec.exhaustNuts} nuts on studs along the ${side} exhaust flange.`,
@@ -1267,5 +1275,5 @@ type PartInput = {
 }
 
 function part(input: PartInput) {
-  return input
+  return { ...input, fasteners: input.fasteners ?? [] }
 }

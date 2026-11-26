@@ -24,6 +24,14 @@ function canvasTexture(size: number, paint: (data: Uint8ClampedArray, size: numb
 }
 
 let roughness: CanvasTexture | null | undefined
+let ribs: CanvasTexture | null | undefined
+
+export function disposeGeneratedTextures(): void {
+  roughness?.dispose()
+  ribs?.dispose()
+  roughness = undefined
+  ribs = undefined
+}
 
 export function roughnessTexture(): CanvasTexture | null {
   if (roughness !== undefined) return roughness
@@ -44,7 +52,8 @@ export function roughnessTexture(): CanvasTexture | null {
 }
 
 export function ribTexture(): CanvasTexture | null {
-  return canvasTexture(64, (data, size) => {
+  if (ribs !== undefined) return ribs
+  ribs = canvasTexture(64, (data, size) => {
     for (let y = 0; y < size; y += 1) {
       for (let x = 0; x < size; x += 1) {
         const rib = x % 8 < 2 ? 70 : 28
@@ -56,4 +65,5 @@ export function ribTexture(): CanvasTexture | null {
       }
     }
   }, 1)
+  return ribs
 }

@@ -28,7 +28,7 @@ describe('parts.json', () => {
 
   it('only names meshes and nodes that exist on the engine model', () => {
     const parsed = parseParts(parts)
-    const glb = readFileSync('public/models/engine.glb')
+    const glb = readFileSync('reference/engine.glb')
     const { nodes, meshes } = gltfNames(glb)
     const known = new Set([...nodes, ...meshes])
 

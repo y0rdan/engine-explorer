@@ -21,22 +21,19 @@ describe('V6 and V8 catalog entries', () => {
   it('registers both generic engines and validates every entry', () => {
     expect(engines.map((engine) => engine.id)).toEqual(['generic-inline-4', 'generic-v6', 'generic-v8'])
     for (const engine of engines) {
-      expect(engine.category).toBe('engine')
       expect(engine.brand).toBe('Generic')
-      expect(engine.specs.length).toBeGreaterThan(0)
-      expect(engine.source.kind).toBe('procedural')
-      if (engine.source.kind === 'procedural') expect(engine.source.template.length).toBeGreaterThan(0)
-      expect(engine.fastenerLayout.cylinders).toBeGreaterThan(0)
+      expect(engine.parameters.configuration.cylinders).toBeGreaterThan(0)
+      expect(engine.parameters.configuration.valvetrain).toBe('dohc')
     }
     expect(genericV6.layout).toBe('v6')
     expect(genericV6.displacementCc).toBe(3498)
-    expect(genericV6.fastenerLayout).toEqual({ cylinders: 6, banks: 2, heads: 2, valvetrain: 'dohc' })
+    expect(genericV6.parameters.configuration).toEqual({ cylinders: 6, banks: 2, heads: 2, valvetrain: 'dohc' })
     expect(genericV8.layout).toBe('v8')
     expect(genericV8.displacementCc).toBe(4999)
-    expect(genericV8.fastenerLayout.cylinders).toBe(8)
+    expect(genericV8.parameters.configuration.cylinders).toBe(8)
     expect(genericV8.parts.find((part) => part.id === 'pistons-left')?.description).toMatch(/1, 3, 5, 7/)
     expect(genericV8.parts.find((part) => part.id === 'pistons-right')?.description).toMatch(/2, 4, 6, 8/)
-    expect(genericV8.fastenerLayout.banks).toBe(2)
+    expect(genericV8.parameters.configuration.banks).toBe(2)
   })
 
   it('gives every part and layer its own description', () => {
@@ -79,6 +76,8 @@ describe('V6 and V8 catalog entries', () => {
         expect(bolts?.type).toBe('bolt')
         expect(bolts && bolts.count >= 8 && bolts.count <= 10).toBe(true)
         expect(bolts?.positions).toHaveLength(bolts?.count ?? 0)
+        expect(bolts?.id).toBe('head-bolts')
+        expect(bolts?.torqueNm.min).toBeLessThanOrEqual(bolts?.torqueNm.max ?? 0)
         expect(bolts?.notes).toMatch(/typical, display only/i)
         expect(closestStep(bolts?.positions ?? [], bolts?.sequence ?? [])).toBeLessThanOrEqual(2)
       }
@@ -98,13 +97,13 @@ describe('V6 and V8 catalog entries', () => {
         expect(exhaust && exhaust.count >= 6 && exhaust.count <= 8).toBe(true)
         expect(exhaust?.notes).toMatch(/stud/i)
       }
-      const caps = engine.fastenerLayout.banks === 2 && engine.layout === 'v6' ? 4 : 5
+      const caps = engine.layout === 'v6' ? 4 : 5
       const mains = engine.parts.find((part) => part.id === 'engine-block')?.fasteners ?? []
       expect(mains[0]?.count).toBe(caps * 2)
       expect(mains[1]?.notes).toMatch(/side bolt/i)
       for (const side of ['left', 'right']) {
         const rods = engine.parts.find((part) => part.id === `pistons-${side}`)?.fasteners?.[0]
-        expect(rods?.count).toBe(engine.fastenerLayout.cylinders)
+        expect(rods?.count).toBe(engine.parameters.configuration.cylinders)
       }
       const pan = engine.parts.find((part) => part.id === 'oil-pan')?.fasteners?.[0]
       const timing = engine.parts.find((part) => part.id === 'timing-drive')?.fasteners?.[0]
@@ -113,7 +112,7 @@ describe('V6 and V8 catalog entries', () => {
       for (const part of engine.parts) {
         for (const item of part.fasteners ?? []) {
           expect(item.notes).toMatch(/typical, display only/i)
-          expect(item.torque_nm.min).toBeLessThanOrEqual(item.torque_nm.max)
+          expect(item.torqueNm.min).toBeLessThanOrEqual(item.torqueNm.max)
         }
       }
     }

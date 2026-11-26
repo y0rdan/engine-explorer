@@ -25,7 +25,7 @@ This GLB is not loaded by the default view. It remains in the repo as a scale an
 
 | | |
 | --- | --- |
-| File | `public/models/engine.glb` |
+| File | `reference/engine.glb` |
 | What it is | Stylized inline-four car engine, about 0.71 × 0.71 × 0.81 m (W × D × H), one mesh |
 | Source | [Car Engine on Grab3D](https://grab3d.com/models/vehicles/car-engine/) |
 | Author | Grab3D |
@@ -35,7 +35,7 @@ This GLB is not loaded by the default view. It remains in the repo as a scale an
 
 Grab3D's package says the mesh and textures were built with Blender scripts. Those scripts were written with an AI coding assistant. No generative model produced the geometry or textures. The same note is in the download's `LICENSE.txt`.
 
-The footer still names Grab3D, links to the source page, and says this file is not loaded.
+About names Grab3D, links to the source page, and says this file is not loaded. The file stays in `reference/` and is not part of the GitHub Pages upload.
 
 ## Textures
 

@@ -15,34 +15,17 @@ export function engineById(id: string): EngineRecord | null {
   return engines.find((engine) => engine.id === id) ?? null
 }
 
-export function categoriesIn(list: readonly EngineRecord[]): string[] {
-  const seen: string[] = []
-  for (const engine of list) {
-    if (!seen.includes(engine.category)) seen.push(engine.category)
-  }
-  return seen
-}
-
-export function layoutsIn(list: readonly EngineRecord[], category: string | null): string[] {
-  const seen: string[] = []
-  for (const engine of list) {
-    if (category && engine.category !== category) continue
-    if (!seen.includes(engine.layout)) seen.push(engine.layout)
-  }
-  return seen
-}
-
 export function filterEngines(
   list: readonly EngineRecord[],
   input: { category: string | null; layout: string | null; text: string },
 ): EngineRecord[] {
   const text = input.text.trim().toLowerCase()
   return list.filter((engine) => {
-    if (input.category && engine.category !== input.category) return false
+    if (input.category && input.category !== 'engine') return false
     if (input.layout && engine.layout !== input.layout) return false
     if (!text) return true
-    const specs = engine.specs.map((spec) => `${spec.label} ${spec.value} ${spec.unit ?? ''}`).join(' ')
-    const haystack = `${engine.brand} ${engine.model} ${engine.engineCode} ${engine.layout} ${engine.displacementCc} ${specs}`.toLowerCase()
+    const configuration = engine.parameters.configuration
+    const haystack = `${engine.brand} ${engine.model} ${engine.engineCode} ${engine.layout} ${engine.displacementCc} ${configuration.cylinders} ${configuration.valvetrain}`.toLowerCase()
     return haystack.includes(text)
   })
 }

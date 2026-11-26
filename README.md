@@ -65,4 +65,4 @@ A later file such as `toyota-2zr-fe.ts` can use the same fields. Do not add bran
 
 ## Project layout
 
-See [ARCHITECTURE.md](ARCHITECTURE.md). In short: UI in `src/components/`, engine files in `src/data/engines/`, the inline-4 template in `src/components/inline4/`, and the reference GLB in `public/models/`.
+See [ARCHITECTURE.md](ARCHITECTURE.md). In short: UI in `src/components/`, engine files in `src/data/engines/`, the inline-4 template in `src/components/inline4/`, and the reference GLB in `reference/` (not deployed).

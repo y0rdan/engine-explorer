@@ -1,21 +1,21 @@
-import { layoutFromEngine, type MotionLayout } from './layout.ts'
+import { layoutFromEngine, type EngineLayout } from './layout.ts'
 import type { EngineRecord } from './schema.ts'
-import { layoutVee } from './veeLayout.ts'
+import { layoutVee, type VeeLayout } from './veeLayout.ts'
 
-// template is an open string. Known builders live here; an unknown name
-// falls back to the inline layout so a future file still loads.
-const builders: Record<string, (engine: EngineRecord) => MotionLayout> = {
+// Known builders live here. An unknown layout id falls back to the inline
+// layout so a file that parsed under a newer schema still loads.
+const builders: Record<string, (engine: EngineRecord) => EngineLayout | VeeLayout> = {
   'inline-4': layoutFromEngine,
   v6: layoutVee,
   v8: layoutVee,
 }
 
 export function templateName(engine: EngineRecord): string {
-  return engine.source.kind === 'procedural' ? engine.source.template : ''
+  return engine.layout
 }
 
-export function layoutFor(engine: EngineRecord): MotionLayout {
-  const build = builders[templateName(engine)]
+export function layoutFor(engine: EngineRecord): EngineLayout | VeeLayout {
+  const build = builders[engine.layout]
   if (!build) return layoutFromEngine(engine)
   return build(engine)
 }

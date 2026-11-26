@@ -18,6 +18,7 @@ import {
 } from './frameModel.ts'
 import { applyFasteners } from './inline4/fastenerMotion.ts'
 import { applyMotion, applyPlacements } from './inline4/simulate.ts'
+import { showroomIsBusy, stepIdlePresentation } from './idleBob.ts'
 
 export type DriverProps = {
   engine: EngineRecord
@@ -57,6 +58,7 @@ export function SceneDriver({
   const sizeKey = useRef('')
   const paddingKey = useRef('')
   const target = useRef(new Vector3())
+  const idleSince = useRef(0)
 
   useEffect(() => {
     pokeRef.current = invalidate
@@ -104,10 +106,6 @@ export function SceneDriver({
       assemblyMode: props.assemblyMode,
     })
     applyMotion(root, layout, props.runtime)
-    const bobTarget = idleBob(props, now)
-    const blend = props.reducedMotion ? 1 : 1 - Math.exp(-4 * Math.max(step, 0.016))
-    root.position.y += (bobTarget - root.position.y) * blend
-    const bobbing = Math.abs(root.position.y - bobTarget) > 0.0004 || Math.abs(bobTarget) > 0.0004
     root.updateWorldMatrix(true, true)
     applyFasteners(root, props.engine, layout, props.runtime, {
       partId: props.partId,
@@ -159,28 +157,33 @@ export function SceneDriver({
     } else if (camera instanceof PerspectiveCamera && isShowroomControls(controls)) {
       clampCameraPlane(camera, controls)
     }
-    if ((moving || cameraMoving || bobbing) && now - lastSample.current > 0.12) {
+    const runtime = props.runtime
+    const busy = showroomIsBusy({
+      assemblyMode: props.assemblyMode,
+      enginePlaying: runtime.enginePlaying,
+      explodePlaying: runtime.explodePlaying,
+      assemblyPlaying: runtime.assemblyPlaying,
+      explode: runtime.explode,
+      assembly: runtime.assembly,
+    })
+    if (moving || cameraMoving || userHold.current || busy) idleSince.current = now
+    const bob = stepIdlePresentation({
+      reducedMotion: props.reducedMotion,
+      busy,
+      now,
+      delta: step,
+      idleSince: idleSince.current,
+      positionY: root.position.y,
+    })
+    root.position.y = bob.positionY
+    if ((moving || cameraMoving || bob.invalidate) && now - lastSample.current > 0.12) {
       lastSample.current = now
       props.onSample({ explode: props.runtime.explode, assembly: props.runtime.assembly })
     }
-    if (moving || cameraMoving || bobbing) invalidate()
+    if (moving || cameraMoving || bob.invalidate) invalidate()
   })
 
   return null
-}
-
-function idleBob(props: DriverProps, now: number): number {
-  if (props.reducedMotion) return 0
-  const runtime = props.runtime
-  const busy =
-    runtime.enginePlaying ||
-    runtime.explodePlaying ||
-    runtime.assemblyPlaying ||
-    props.assemblyMode ||
-    runtime.explode > 0.02 ||
-    runtime.assembly < 0.98
-  if (busy) return 0
-  return Math.sin(now * 1.5) * 0.0032
 }
 
 function focusObject(root: Object3D, props: DriverProps): Object3D {

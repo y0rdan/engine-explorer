@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Gauge, Layers, Pause, Play, RotateCcw, Undo2, Wrench, Boxes, List } from 'lucide-react'
-import { forwardRef, type Ref } from 'react'
+import { forwardRef, type ReactNode, type Ref } from 'react'
 import { RPM_MAX, RPM_MIN } from '../engine/kinematics.ts'
 import { activeStepIndex, assemblySteps, stepLabel, type AssemblyDirection } from '../engine/placement.ts'
 import { TORQUE_NOTE, type EngineRecord } from '../engine/schema.ts'
@@ -24,6 +24,7 @@ export const Toolbar = forwardRef(function Toolbar({
   assembly,
   direction,
   narrow,
+  switcher,
   onSegment,
   onExplode,
   onPlayExplode,
@@ -46,6 +47,7 @@ export const Toolbar = forwardRef(function Toolbar({
   assembly: number
   direction: AssemblyDirection
   narrow: boolean
+  switcher?: ReactNode
   onSegment: (segment: Segment) => void
   onExplode: (value: number) => void
   onPlayExplode: () => void
@@ -67,6 +69,7 @@ export const Toolbar = forwardRef(function Toolbar({
   return (
     <div ref={ref} className="toolbar" data-segment={segment}>
       <div className="toolbar-row" role="toolbar" aria-label="Engine controls">
+        {switcher}
         <div className="segments" role="group" aria-label="Mode">
           {SEGMENTS.map((item) => {
             const Icon = item.icon

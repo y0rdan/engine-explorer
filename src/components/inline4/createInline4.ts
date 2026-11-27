@@ -29,6 +29,7 @@ export type FastenerRecord = {
   torqueAngle?: number
   notes: string
   sequence: number
+  labelSlot: number
 }
 
 const dummy = new Object3D()
@@ -61,7 +62,7 @@ export function createInline4(engine: EngineRecord): Group {
   root.add(buildRadiator(layout))
   root.add(buildBattery(layout))
   root.add(buildFasteners(engine))
-  root.add(buildHeadLabels())
+  root.add(buildHeadLabels(boltLabelCount(engine)))
   return root
 }
 
@@ -107,7 +108,7 @@ export function createTray(layout: EngineLayout): Mesh {
   return mesh
 }
 
-export function trayOrigin(layout: EngineLayout): Vec3 {
+export function trayOrigin(layout: { intakeSign: number; block: { size: Vec3 } }): Vec3 {
   return [0.05, 0.02, layout.intakeSign * (layout.block.size[2] / 2 + 0.28)]
 }
 
@@ -640,6 +641,21 @@ function buildBattery(layout: EngineLayout): Group {
   ])
 }
 
+export function boltLabelCount(engine: EngineRecord): number {
+  return engine.parts.reduce(
+    (sum, part) => sum + part.fasteners.filter((item) => item.id === 'head-bolts').reduce((inner, item) => inner + item.count, 0),
+    0,
+  )
+}
+
+export function createFastenerField(engine: EngineRecord): Group {
+  return buildFasteners(engine)
+}
+
+export function createBoltLabels(count: number): Group {
+  return buildHeadLabels(count)
+}
+
 function buildFasteners(engine: EngineRecord): Group {
   const group = new Group()
   group.name = 'fastener-field'
@@ -663,6 +679,7 @@ function buildFasteners(engine: EngineRecord): Group {
     const mesh = new InstancedMesh(geometry, new MeshStandardMaterial(), items.length)
     mesh.name = `fasteners:${type}`
     mesh.userData.kind = 'zinc'
+    let headSlot = 0
     const records: FastenerRecord[] = items.map((item) => ({
       partId: item.partId,
       fastenerId: item.group.id,
@@ -675,6 +692,7 @@ function buildFasteners(engine: EngineRecord): Group {
       torqueAngle: item.group.torqueNm.angle,
       notes: item.group.notes,
       sequence: item.group.sequence[item.index] ?? item.index + 1,
+      labelSlot: item.group.id === 'head-bolts' ? headSlot++ : -1,
     }))
     mesh.userData.records = records
     for (let index = 0; index < items.length; index += 1) {
@@ -689,15 +707,14 @@ function buildFasteners(engine: EngineRecord): Group {
   return group
 }
 
-function buildHeadLabels(): Group {
+function buildHeadLabels(count: number): Group {
   const group = new Group()
   group.name = 'bolt-labels'
-  if (typeof document === 'undefined') return group
-  const numbers = [8, 4, 1, 5, 9, 7, 3, 2, 6, 10]
-  for (let index = 0; index < numbers.length; index += 1) {
+  if (typeof document === 'undefined' || count === 0) return group
+  for (let index = 0; index < count; index += 1) {
     const element = document.createElement('div')
     element.className = 'bolt-number'
-    element.textContent = String(numbers[index] ?? index + 1)
+    element.textContent = ''
     const label = new CSS2DObject(element)
     label.visible = false
     label.userData.labelIndex = index

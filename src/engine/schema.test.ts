@@ -34,6 +34,14 @@ describe('parseEngine', () => {
     expect(() => parseEngine(thin)).toThrow(/2 to 4/)
   })
 
+  it('keeps configuration on the record and rejects an unknown layout', () => {
+    const engine = parseEngine(structuredClone(genericInline4Data))
+    expect(engine.parameters.configuration).toEqual({ cylinders: 4, banks: 1, heads: 1, valvetrain: 'dohc' })
+    const odd = structuredClone(genericInline4Data)
+    odd.layout = 'radial-9'
+    expect(() => parseEngine(odd)).toThrow(/layout/)
+  })
+
   it('rejects an accessory anchor that is not a part', () => {
     const extra = structuredClone(genericInline4Data)
     ;(extra.parameters.accessories as Record<string, number[]>).turbo = [0, 0, 0]

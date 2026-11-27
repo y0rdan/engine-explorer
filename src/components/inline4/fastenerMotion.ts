@@ -6,12 +6,13 @@ import {
   Vector3,
   type Object3D as ThreeObject,
 } from 'three'
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import { fastenerInstall, poseFromInstall, stepBlend, traySlot } from '../../engine/fasteners.ts'
 import { activeStepIndex, assemblySteps } from '../../engine/placement.ts'
 import type { EngineRecord, FastenerGroup } from '../../engine/schema.ts'
 import type { EngineRuntime } from '../../engine/runtime.ts'
 import { emphasisFor } from '../../engine/emphasis.ts'
-import type { EngineLayout } from '../../engine/layout.ts'
+import type { MotionLayout, Vec3 } from '../../engine/layout.ts'
 import type { FastenerRecord } from './createInline4.ts'
 import { trayOrigin } from './createInline4.ts'
 import { rodFrame } from './simulate.ts'
@@ -30,10 +31,12 @@ const labelOffset = new Vector3(0, 0.03, 0)
 
 type View = { partId: string | null; isolated: boolean; assemblyMode: boolean }
 
+type PoseLayout = MotionLayout & { intakeSign: number; block: { size: Vec3 } }
+
 export function applyFasteners(
   root: ThreeObject,
   engine: EngineRecord,
-  layout: EngineLayout,
+  layout: PoseLayout,
   runtime: EngineRuntime,
   view: View,
 ): void {
@@ -48,6 +51,7 @@ export function applyFasteners(
   const origin = trayOrigin(layout)
   let slot = 0
   const labelPoints: Vector3[] = []
+  const labelText: string[] = []
   root.updateWorldMatrix(true, true)
   root.traverse((object) => {
     if (!(object as InstancedMesh).isInstancedMesh) return
@@ -92,8 +96,9 @@ export function applyFasteners(
       dummy.scale.setScalar(scale)
       dummy.updateMatrix()
       mesh.setMatrixAt(instance, dummy.matrix)
-      if (record.partId === 'cylinder-head' && record.fastenerId === 'head-bolts') {
-        labelPoints[record.index] = point.clone()
+      if (showNumbers && record.fastenerId === 'head-bolts' && record.partId === active?.partId && record.labelSlot >= 0) {
+        labelPoints[record.labelSlot] = point.clone()
+        labelText[record.labelSlot] = String(record.sequence)
       }
     })
     mesh.instanceMatrix.needsUpdate = true
@@ -103,6 +108,8 @@ export function applyFasteners(
     const index = child.userData.labelIndex as number
     const at = labelPoints[index]
     child.visible = showNumbers && Boolean(at)
+    const element = (child as CSS2DObject).element
+    if (element && labelText[index]) element.textContent = labelText[index]
     if (at) child.position.copy(at).add(labelOffset)
   })
 }
@@ -111,7 +118,7 @@ function anchorMatrix(
   root: ThreeObject,
   partGroup: ThreeObject,
   anchor: string | null,
-  layout: EngineLayout,
+  layout: MotionLayout,
   runtime: EngineRuntime,
 ): Matrix4 {
   if (anchor?.startsWith('rod:')) {

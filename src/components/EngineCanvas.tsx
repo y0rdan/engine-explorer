@@ -1,6 +1,6 @@
 import { AdaptiveDpr, ContactShadows, EnvironmentPortal, Lightformer } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { ACESFilmicToneMapping, Plane, SRGBColorSpace, Vector3, type DataTexture } from 'three'
 import { attachLabelRenderer, createLabelRenderer, renderLabels } from './inline4/labels.ts'
 import type { EngineRecord } from '../engine/schema.ts'
@@ -8,7 +8,10 @@ import { CanvasErrorBoundary } from './CanvasErrorBoundary.tsx'
 import { EngineControls } from './EngineControls.tsx'
 import { SCENE_LABEL } from './engineModel.ts'
 import { EngineViewProvider } from './inline4/chrome.tsx'
-import { Inline4Engine, type FastenerTip } from './inline4/Inline4Engine.tsx'
+import type { FastenerTip } from './inline4/Inline4Engine.tsx'
+
+const Inline4Engine = lazy(() => import('./inline4/Inline4Engine.tsx').then((module) => ({ default: module.Inline4Engine })))
+const VeeEngine = lazy(() => import('./vee/VeeEngine.tsx').then((module) => ({ default: module.VeeEngine })))
 import { SceneDriver, type DriverProps } from './SceneDriver.tsx'
 import {
   STUDIO_LOAD_ERROR,
@@ -69,6 +72,21 @@ export function EngineCanvas({
   const [lighting, setLighting] = useState<'loading' | 'ready' | 'failed'>('loading')
   const [hdr, setHdr] = useState<DataTexture | null>(null)
   const clipPlane = useMemo(() => new Plane(new Vector3(0, 0, -1), 0.02), [])
+  const view = useMemo(
+    () => ({
+      partId,
+      layerId,
+      hoveredPartId,
+      isolated,
+      assemblyPartId,
+      cutaway,
+      clipPlane,
+      selectPart: onSelectPart,
+      selectLayer: onSelectLayer,
+      hoverPart: onHover,
+    }),
+    [partId, layerId, hoveredPartId, isolated, assemblyPartId, cutaway, clipPlane, onSelectPart, onSelectLayer, onHover],
+  )
   const down = useRef({ x: 0, y: 0 })
   const selected = engine.parts.find((part) => part.id === partId)
   const label = selected ? `${SCENE_LABEL}. ${selected.displayName} selected.` : SCENE_LABEL
@@ -132,45 +150,18 @@ export function EngineCanvas({
         <directionalLight position={[0.35, 5.4, 0.8]} intensity={1.05} color="#fff6ee" />
         <directionalLight position={[-3.2, 2.4, -2.4]} intensity={0.7} color="#c5d4ea" />
         <directionalLight position={[2.6, 1.1, 2.5]} intensity={0.36} color="#ffd2b0" />
-        {hdr && (
-          <Suspense fallback={null}>
-            <EnvironmentPortal map={hdr} frames={1} resolution={lowPower ? 128 : 256} environmentIntensity={0.4}>
-              <Lightformer
-                form="rect"
-                intensity={1.35}
-                color="#fff3e6"
-                position={[0, 3.2, 0.35]}
-                rotation={[-Math.PI / 2, 0, 0]}
-                scale={[4.2, 2.6, 1]}
-              />
-              <Lightformer
-                form="rect"
-                intensity={0.45}
-                color="#d7e3f2"
-                position={[-2.2, 1.6, -1.8]}
-                scale={[1.6, 2.2, 1]}
-              />
-            </EnvironmentPortal>
-          </Suspense>
-        )}
+        {hdr && <StudioEnvironment hdr={hdr} lowPower={lowPower} />}
         <ScreenLabels />
         <EngineControls />
         <SceneDriver driverRef={driverRef} pokeRef={pokeRef} />
-        <EngineViewProvider
-          value={{
-            partId,
-            layerId,
-            hoveredPartId,
-            isolated,
-            assemblyPartId,
-            cutaway,
-            clipPlane,
-            selectPart: onSelectPart,
-            selectLayer: onSelectLayer,
-            hoverPart: onHover,
-          }}
-        >
-          <Inline4Engine engine={engine} onFastener={onFastener} />
+        <EngineViewProvider value={view}>
+          <Suspense fallback={null}>
+            {engine.layout === 'v6' || engine.layout === 'v8' ? (
+              <VeeEngine engine={engine} onFastener={onFastener} />
+            ) : (
+              <Inline4Engine engine={engine} onFastener={onFastener} />
+            )}
+          </Suspense>
         </EngineViewProvider>
         <BakedContactShadow lowPower={lowPower} />
       </Canvas>
@@ -187,6 +178,24 @@ export function EngineCanvas({
     </CanvasErrorBoundary>
   )
 }
+
+const StudioEnvironment = memo(function StudioEnvironment({ hdr, lowPower }: { hdr: DataTexture; lowPower: boolean }) {
+  return (
+    <Suspense fallback={null}>
+      <EnvironmentPortal map={hdr} frames={1} resolution={lowPower ? 128 : 256} environmentIntensity={0.4}>
+        <Lightformer
+          form="rect"
+          intensity={1.35}
+          color="#fff3e6"
+          position={[0, 3.2, 0.35]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          scale={[4.2, 2.6, 1]}
+        />
+        <Lightformer form="rect" intensity={0.45} color="#d7e3f2" position={[-2.2, 1.6, -1.8]} scale={[1.6, 2.2, 1]} />
+      </EnvironmentPortal>
+    </Suspense>
+  )
+})
 
 const BakedContactShadow = memo(function BakedContactShadow({ lowPower }: { lowPower: boolean }) {
   return (

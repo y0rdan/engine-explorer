@@ -1,8 +1,11 @@
 import { CircleHelp, Info } from 'lucide-react'
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react'
 import './App.css'
-import { defaultEngine } from './data/engines/catalog.ts'
-import { formatDisplacement, formatYears } from './engine/schema.ts'
+import { EnginePicker } from './components/EnginePicker.tsx'
+import { engineCards } from './data/engines/cards.ts'
+import { loadEngine } from './data/engines/loadEngine.ts'
+import { formatDisplacement, type EngineRecord } from './engine/schema.ts'
+import { readEngineParam, urlForEngine } from './engine/urlState.ts'
 import { GESTURE_HINT } from './components/onboarding.ts'
 
 const EngineExperience = lazy(() =>
@@ -14,11 +17,52 @@ const EngineExperience = lazy(() =>
 export default function App() {
   const [about, setAbout] = useState(false)
   const [help, setHelp] = useState(false)
+  const [engine, setEngine] = useState<EngineRecord | null>(null)
+  const [ready, setReady] = useState(false)
   const aboutRef = useRef<HTMLDivElement>(null)
   const helpRef = useRef<HTMLDivElement>(null)
   const aboutId = useId()
   const helpId = useId()
-  const specs = `${defaultEngine.brand} ${defaultEngine.engineCode} · ${formatDisplacement(defaultEngine.displacementCc)} · ${formatYears(defaultEngine.yearRange)}`
+  const specs = engine
+    ? `${engine.brand} ${engine.engineCode} · ${formatDisplacement(engine.displacementCc)} example`
+    : 'Pick an engine'
+
+  useEffect(() => {
+    let cancel = false
+    const load = () => {
+      const id = readEngineParam(window.location.search)
+      if (!id) {
+        if (!cancel) {
+          setEngine(null)
+          setReady(true)
+        }
+        return
+      }
+      loadEngine(id).then((record) => {
+        if (cancel) return
+        if (!record) {
+          window.history.replaceState(null, '', urlForEngine(null, window.location))
+          setEngine(null)
+        } else {
+          setEngine(record)
+        }
+        setReady(true)
+      })
+    }
+    load()
+    window.addEventListener('popstate', load)
+    return () => {
+      cancel = true
+      window.removeEventListener('popstate', load)
+    }
+  }, [])
+
+  function openEngine(id: string) {
+    window.history.pushState(null, '', urlForEngine(id, window.location, true))
+    loadEngine(id).then((record) => {
+      if (record) setEngine(record)
+    })
+  }
 
   useEffect(() => {
     if (!about && !help) return
@@ -93,7 +137,7 @@ export default function App() {
               <div ref={aboutRef} id={aboutId} className="popover" role="dialog" aria-label="About">
                 <footer>
                   <p>
-                    Procedural inline-4. Reference model by{' '}
+                    Procedural engines. Reference model by{' '}
                     <a href="https://grab3d.com/models/vehicles/car-engine/">Grab3D</a> (CC0), kept in the repo and not
                     loaded.
                   </p>
@@ -106,9 +150,13 @@ export default function App() {
       </header>
       <main className="stage">
         <h2 className="visually-hidden">3D view</h2>
-        <Suspense fallback={<p className="canvas-fallback">Loading 3D view…</p>}>
-          <EngineExperience />
-        </Suspense>
+        {!ready && <p className="canvas-fallback">Loading engine…</p>}
+        {ready && !engine && <EnginePicker engines={engineCards} unknown={false} onSelect={openEngine} />}
+        {ready && engine && (
+          <Suspense fallback={<p className="canvas-fallback">Loading 3D view…</p>}>
+            <EngineExperience key={engine.id} engine={engine} onEngineChange={openEngine} />
+          </Suspense>
+        )}
       </main>
     </div>
   )

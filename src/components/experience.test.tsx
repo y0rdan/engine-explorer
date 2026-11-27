@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { genericInline4 } from '../data/engines/catalog.ts'
 import { EngineExperience } from './EngineExperience.tsx'
 import { HINT_KEY } from './onboarding.ts'
 import { BottomSheet } from './BottomSheet.tsx'
@@ -16,7 +17,7 @@ describe('toolbar, onboarding, and part selection', () => {
   })
 
   it('shows explode controls first and reveals assembly steps only in that segment', async () => {
-    render(<EngineExperience />)
+    render(<EngineExperience engine={genericInline4} />)
     expect(await screen.findByTestId('engine-canvas')).toBeInTheDocument()
     expect(screen.getByText('Select a part, or drag Explode to take it apart.')).toBeInTheDocument()
     expect(screen.getByLabelText('Explode amount')).toBeInTheDocument()
@@ -34,7 +35,7 @@ describe('toolbar, onboarding, and part selection', () => {
   })
 
   it('remembers a dismissed gesture hint and zeros explode when a part is selected', async () => {
-    render(<EngineExperience />)
+    render(<EngineExperience engine={genericInline4} />)
     expect(await screen.findByText(/Drag to rotate/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Got it' }))
     expect(window.localStorage.getItem(HINT_KEY)).toBe('1')
@@ -52,7 +53,7 @@ describe('toolbar, onboarding, and part selection', () => {
   it('replaces an invalid part query instead of pushing history', async () => {
     const replace = vi.spyOn(window.history, 'replaceState')
     window.history.replaceState(null, '', '/engine-explorer/?part=not-a-part')
-    render(<EngineExperience />)
+    render(<EngineExperience engine={genericInline4} />)
     await screen.findByTestId('engine-canvas')
     expect(replace).toHaveBeenCalled()
     expect(window.location.search).not.toContain('not-a-part')

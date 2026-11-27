@@ -1,4 +1,4 @@
-export const LAYOUTS = ['inline-4'] as const
+export const LAYOUTS = ['inline-4', 'v6', 'v8'] as const
 export type LayoutId = (typeof LAYOUTS)[number]
 
 export const SYSTEMS = [
@@ -419,13 +419,15 @@ function parseParameters(value: unknown, partIds: Set<string>): EngineParameters
     width: metric(value.block.width, 'parameters.block.width', 0.12, 0.4),
     height: metric(value.block.height, 'parameters.block.height', 0.18, 0.45),
   }
-  if (block.length < boreSpacing * 3.4) {
-    fail('parameters.block.length is too short for four bores at this spacing')
+  const configuration = parseConfiguration(value.configuration)
+  const along = Math.max(1, Math.round(configuration.cylinders / Math.max(configuration.banks, 1)))
+  const span = Math.max(along - 1, 1) + 0.4
+  if (block.length < boreSpacing * span) {
+    fail(`parameters.block.length is too short for ${along} bores at this spacing`)
   }
   const intakeSide = side(value.intakeSide, 'parameters.intakeSide')
   const exhaustSide = side(value.exhaustSide, 'parameters.exhaustSide')
   if (intakeSide === exhaustSide) fail('intake and exhaust must sit on opposite sides')
-  const configuration = parseConfiguration(value.configuration)
   const accessories: Record<string, Vec3> = {}
   if (value.accessories !== undefined) {
     if (!isRecord(value.accessories)) fail('parameters.accessories must be an object')
@@ -489,6 +491,13 @@ export function parseEngine(value: unknown): EngineRecord {
     parameters: parseParameters(value.parameters, ids),
     parts,
   }
+}
+
+export function layoutLabel(layout: string): string {
+  if (layout === 'inline-4') return 'Inline-4'
+  if (layout === 'v6') return 'V6'
+  if (layout === 'v8') return 'V8'
+  return layout
 }
 
 export function formatDisplacement(cc: number): string {

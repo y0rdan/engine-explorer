@@ -1,3 +1,4 @@
+import { INLINE4_FIRE_ANGLES, INLINE4_PHASES } from './kinematics.ts'
 import type { EngineRecord, Vec3 } from './schema.ts'
 
 export type { Vec3 }
@@ -7,13 +8,34 @@ export type BoxSize = {
   size: Vec3
 }
 
-export type EngineLayout = {
-  boreSpacing: number
-  bore: number
+export type CylinderMotion = {
+  index: number
+  x: number
+  phase: number
+  fireAngle: number
+  beta: number
+  boreAxis: Vec3
+  journalX: number
+  // Mirrored cranks orbit the opposite way so odd cylinders can stay on the left bank.
+  crankMirror?: boolean
+}
+
+export function pistonPhaseOffset(cylinder: CylinderMotion): number {
+  return cylinder.crankMirror ? cylinder.phase + cylinder.beta : cylinder.phase - cylinder.beta
+}
+
+export type MotionLayout = {
+  crankCenter: Vec3
   crankRadius: number
   rodLength: number
+  cylinders: CylinderMotion[]
+  anchors: Record<string, Vec3>
+}
+
+export type EngineLayout = MotionLayout & {
+  boreSpacing: number
+  bore: number
   wristToCrown: number
-  crankCenter: Vec3
   pistonX: number[]
   deckY: number
   intakeSign: number
@@ -21,7 +43,6 @@ export type EngineLayout = {
   head: BoxSize
   cover: BoxSize
   pan: BoxSize
-  anchors: Record<string, Vec3>
   beltPoints: Vec3[]
   timingPoints: Vec3[]
   frontX: number
@@ -33,7 +54,7 @@ export type EngineLayout = {
 
 const LIFT = 0.035
 
-function beltLoop(pulleys: { c: Vec3; r: number }[]): Vec3[] {
+export function beltLoop(pulleys: { c: Vec3; r: number }[]): Vec3[] {
   const cy = pulleys.reduce((sum, pulley) => sum + pulley.c[1], 0) / pulleys.length
   const cz = pulleys.reduce((sum, pulley) => sum + pulley.c[2], 0) / pulleys.length
   const ordered = pulleys
@@ -106,6 +127,16 @@ export function layoutFromEngine(engine: EngineRecord): EngineLayout {
     { c: camSprocket, r: 0.045 },
     { c: crankSprocket, r: 0.024 },
   ])
+  const up: Vec3 = [0, 1, 0]
+  const cylinders: CylinderMotion[] = pistonX.map((x, index) => ({
+    index,
+    x,
+    phase: INLINE4_PHASES[index] ?? 0,
+    fireAngle: INLINE4_FIRE_ANGLES[index] ?? 0,
+    beta: 0,
+    boreAxis: up,
+    journalX: x,
+  }))
 
   return {
     boreSpacing,
@@ -114,6 +145,7 @@ export function layoutFromEngine(engine: EngineRecord): EngineLayout {
     rodLength,
     wristToCrown,
     crankCenter,
+    cylinders,
     pistonX,
     deckY,
     intakeSign,

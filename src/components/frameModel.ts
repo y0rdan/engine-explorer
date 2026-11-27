@@ -154,6 +154,25 @@ export function projectBox(camera: PerspectiveCamera, box: Box3): { width: numbe
   return { width: (maxX - minX) / 2, height: (maxY - minY) / 2, centerY: (minY + maxY) / 2 }
 }
 
+const FIT_STEP_EPSILON = 0.0008
+
+function lookAt(controls: ShowroomControls, pose: FramePose, smooth: boolean): void {
+  controls.setLookAt(pose.position.x, pose.position.y, pose.position.z, pose.target.x, pose.target.y, pose.target.z, smooth)
+  controls.minDistance = pose.minDistance
+  controls.maxDistance = pose.maxDistance
+}
+
+// Snap, then flush once. setLookAt marks the controls dirty; update() applies the
+// pose and clears that flag. A later damped update must not be required.
+function snapPose(controls: ShowroomControls, camera: PerspectiveCamera, pose: FramePose): Vector3 {
+  camera.position.copy(pose.position)
+  lookAt(controls, pose, false)
+  controls.update(0)
+  const target = new Vector3()
+  controls.getTarget(target, true)
+  return target
+}
+
 export function applyShowroomPose(
   controls: ShowroomControls,
   camera: PerspectiveCamera,
@@ -161,29 +180,28 @@ export function applyShowroomPose(
   smooth: boolean,
   step: number,
 ): { moving: boolean; target: Vector3 } {
-  controls.setLookAt(
-    pose.position.x,
-    pose.position.y,
-    pose.position.z,
-    pose.target.x,
-    pose.target.y,
-    pose.target.z,
-    smooth,
-  )
-  controls.minDistance = pose.minDistance
-  controls.maxDistance = pose.maxDistance
+  const beforePos = camera.position.clone()
+  const beforeTarget = new Vector3()
+  controls.getTarget(beforeTarget, true)
+  if (!smooth) {
+    const target = snapPose(controls, camera, pose)
+    return { moving: false, target }
+  }
+  lookAt(controls, pose, true)
   controls.update(step)
   const target = new Vector3()
   controls.getTarget(target, true)
-  return {
-    moving: camera.position.distanceTo(pose.position) > 0.01 || target.distanceTo(pose.target) > 0.01,
-    target,
+  const remain = Math.max(camera.position.distanceTo(pose.position), target.distanceTo(pose.target))
+  const stepped = Math.max(camera.position.distanceTo(beforePos), target.distanceTo(beforeTarget))
+  if (remain < 0.008 || stepped < FIT_STEP_EPSILON) {
+    return { moving: false, target: snapPose(controls, camera, pose) }
   }
+  return { moving: true, target }
 }
 
 export function clampCameraPlane(camera: PerspectiveCamera, controls: ShowroomControls): void {
   const target = new Vector3()
-  const distance = camera.position.distanceTo(controls.getTarget(target, false))
+  const distance = camera.position.distanceTo(controls.getTarget(target, true))
   const near = Math.min(0.05, Math.max(distance / 200, 0.008))
   const far = Math.max(30, distance * 16)
   if (Math.abs(camera.near - near) > 0.002 || Math.abs(camera.far - far) > 0.5) {
@@ -191,6 +209,8 @@ export function clampCameraPlane(camera: PerspectiveCamera, controls: ShowroomCo
     camera.far = far
     camera.updateProjectionMatrix()
   }
+  // setLookAt marks camera-controls dirty even when the numbers did not change.
+  // Only issue it when the settled target is still below the floor.
   if (target.y < 0.04) {
     controls.setLookAt(
       camera.position.x,

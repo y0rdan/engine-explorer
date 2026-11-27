@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { defaultEngine } from '../data/engines/catalog.ts'
+import { engineCards } from '../data/engines/cards.ts'
+import type { EngineRecord } from '../engine/schema.ts'
+import { EngineSwitcher } from './EngineSwitcher.tsx'
 import { activeStepIndex, assemblySteps, type AssemblyDirection } from '../engine/placement.ts'
 import { partById } from '../engine/schema.ts'
 import { RPM_DEFAULT } from '../engine/kinematics.ts'
@@ -36,8 +38,16 @@ function useNarrow(): boolean {
   return narrow
 }
 
-export function EngineExperience() {
-  const engine = defaultEngine
+export function EngineExperience({
+  engine,
+  onEngineChange,
+}: {
+  engine: EngineRecord
+  onEngineChange?: (id: string) => void
+}) {
+  const switcher = () => (
+    <EngineSwitcher engines={engineCards} value={engine.id} onChange={(id) => onEngineChange?.(id)} />
+  )
   const reducedMotion = usePrefersReducedMotion()
   const narrow = useNarrow()
   const runtime = useState(createRuntime)[0]
@@ -113,11 +123,15 @@ export function EngineExperience() {
     fitSmooth: true,
     padding,
     onSample: (sample) => {
-      setHud((current) => ({ ...current, explode: sample.explode, assembly: sample.assembly }))
+      setHud((current) => {
+        if (current.explode === sample.explode && current.assembly === sample.assembly) return current
+        return { ...current, explode: sample.explode, assembly: sample.assembly }
+      })
     },
   })
 
   useLayoutEffect(() => {
+    driverRef.current.engine = engine
     driverRef.current.partId = view.partId
     driverRef.current.layerId = view.layerId
     driverRef.current.isolated = view.isolated
@@ -341,6 +355,7 @@ export function EngineExperience() {
           {part && !narrow && <div className="guide-card">{guide}</div>}
           {part && narrow && (
             <BottomSheet snap={snap} viewportHeight={viewport.height || window.innerHeight} onSnap={setSnap}>
+              {switcher()}
               {guide}
             </BottomSheet>
           )}
@@ -356,6 +371,7 @@ export function EngineExperience() {
             assembly={hud.assembly}
             direction={direction}
             narrow={narrow}
+            switcher={switcher()}
             onSegment={chooseSegment}
             onExplode={(value) => {
               writeRuntime(runtime, { explodePlaying: false, explode: value })

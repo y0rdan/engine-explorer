@@ -123,7 +123,10 @@ export function EngineExperience({
     fitSmooth: true,
     padding,
     onSample: (sample) => {
-      setHud((current) => ({ ...current, explode: sample.explode, assembly: sample.assembly }))
+      setHud((current) => {
+        if (current.explode === sample.explode && current.assembly === sample.assembly) return current
+        return { ...current, explode: sample.explode, assembly: sample.assembly }
+      })
     },
   })
 

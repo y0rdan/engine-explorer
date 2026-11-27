@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useThree, type ThreeEvent } from '@react-three/fiber'
 import { Mesh, type Object3D } from 'three'
 import type { EngineRecord } from '../../engine/schema.ts'
@@ -37,8 +37,15 @@ function Showroom({
   onFastener: (tip: FastenerTip | null) => void
 }) {
   const view = useEngineView()
+  const viewRef = useRef(view)
+  const { partId, cutaway, isolated } = view
+  useLayoutEffect(() => {
+    viewRef.current = view
+  }, [view])
   const invalidate = useThree((state) => state.invalidate)
   useLayoutEffect(() => {
+    const current = viewRef.current
+    let changed = false
     root.traverse((object) => {
       const mesh = object as Mesh
       if (!mesh.isMesh || mesh.userData.fixedMaterial || mesh.userData.glow !== undefined || mesh.userData.belt !== undefined) {
@@ -47,15 +54,23 @@ function Showroom({
       const kind = mesh.userData.kind as MaterialKind | undefined
       if (!kind) return
       const ids = idsFrom(mesh)
-      const emphasis = ids.partId ? emphasisForMesh(ids.partId, ids.layerId, view) : 'idle'
-      mesh.material = sharedMaterial(kind, emphasis, Boolean(mesh.userData.clip), view.cutaway, view.clipPlane, false)
+      const emphasis = ids.partId ? emphasisForMesh(ids.partId, ids.layerId, current) : 'idle'
+      const next = sharedMaterial(kind, emphasis, Boolean(mesh.userData.clip), current.cutaway, current.clipPlane, false)
+      if (mesh.material !== next) {
+        mesh.material = next
+        changed = true
+      }
     })
     root.traverse((object) => {
       if (!object.name.startsWith('part:')) return
-      object.visible = emphasisForMesh(object.name.slice(5), null, view) !== 'hidden'
+      const visible = emphasisForMesh(object.name.slice(5), null, current) !== 'hidden'
+      if (object.visible !== visible) {
+        object.visible = visible
+        changed = true
+      }
     })
-    invalidate()
-  }, [root, view, invalidate])
+    if (changed) invalidate()
+  }, [root, partId, cutaway, isolated, invalidate])
 
   return (
     <primitive

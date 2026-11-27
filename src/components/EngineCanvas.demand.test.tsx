@@ -1,7 +1,6 @@
-import { createRequire } from 'node:module'
 import { act, cleanup, render } from '@testing-library/react'
 import { useLayoutEffect, useRef, useState, type MutableRefObject } from 'react'
-import { DataTexture, FloatType, RGBAFormat, WebGLRenderer } from 'three'
+import { DataTexture, FloatType, RGBAFormat } from 'three'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { genericInline4, genericV6 } from '../data/engines/catalog.ts'
 import { createRuntime } from '../engine/runtime.ts'
@@ -9,9 +8,6 @@ import type { EngineRecord } from '../engine/schema.ts'
 import { EngineCanvas } from './EngineCanvas.tsx'
 import type { DriverProps } from './SceneDriver.tsx'
 import { createStubContext } from './inline4/webglStub.ts'
-
-const require = createRequire(import.meta.url)
-const threeCjs = require('three') as { WebGLRenderer: typeof WebGLRenderer }
 
 vi.mock('./studio.ts', () => {
   const hdr = new DataTexture(new Float32Array([1, 1, 1, 1]), 1, 1, RGBAFormat, FloatType)
@@ -30,6 +26,7 @@ vi.mock('./studio.ts', () => {
 const queued = new Map<number, FrameRequestCallback>()
 let nextFrame = 1
 let draws = 0
+let glRenders = 0
 
 function IdleParent({
   engine,
@@ -103,16 +100,11 @@ async function drain(limit: number): Promise<number> {
 }
 
 describe('demand loop with the showroom canvas', () => {
-  const originals = new Map<typeof WebGLRenderer.prototype, WebGLRenderer['render']>()
-  let renders = 0
-  let frame = 0
-
   beforeEach(() => {
     queued.clear()
     nextFrame = 1
-    renders = 0
-    frame = 0
     draws = 0
+    glRenders = 0
     vi.stubGlobal(
       'ResizeObserver',
       class {
@@ -167,39 +159,24 @@ describe('demand loop with the showroom canvas', () => {
     vi.stubGlobal('cancelAnimationFrame', (id: number) => {
       queued.delete(id)
     })
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement, kind: string) {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((kind: string) => {
       if (kind !== 'webgl2' && kind !== 'webgl') return null
-      const context = createStubContext(this.width || 300, this.height || 150)
-      for (const name of ['clear', 'drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced'] as const) {
+      const context = createStubContext(300, 150) as WebGL2RenderingContext & Record<string, (...args: unknown[]) => unknown>
+      for (const name of ['clear', 'drawElements', 'drawArrays']) {
         const original = context[name]
-        context[name] = ((...args: unknown[]) => {
-          draws += 1
-          return original.apply(context, args)
-        }) as (typeof context)[typeof name]
+        context[name] = (...args: unknown[]) => {
+          if (name === 'clear') glRenders += 1
+          else draws += 1
+          return original(...args)
+        }
       }
-      return context as unknown as WebGL2RenderingContext
+      return context
     })
-    for (const proto of new Set([WebGLRenderer.prototype, threeCjs.WebGLRenderer.prototype])) {
-      const original = proto.render
-      originals.set(proto, original)
-      proto.render = function (
-        this: WebGLRenderer,
-        scene: Parameters<WebGLRenderer['render']>[0],
-        camera: Parameters<WebGLRenderer['render']>[1],
-      ) {
-        renders += 1
-        const result = original.call(this, scene, camera)
-        frame = this.info.render.frame
-        return result
-      }
-    }
   })
 
   afterEach(async () => {
     cleanup()
     await drain(30)
-    for (const [proto, original] of originals) proto.render = original
-    originals.clear()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
@@ -209,7 +186,7 @@ describe('demand loop with the showroom canvas', () => {
     ['v6', genericV6],
   ] as const)('stops gl.render after the first bake for %s', async (_label, engine) => {
     const sampleRef = { current: (_sample: { explode: number; assembly: number }) => {} }
-    const view = render(<IdleParent engine={engine} sampleRef={sampleRef} />)
+    render(<IdleParent engine={engine} sampleRef={sampleRef} />)
     await act(async () => {
       window.dispatchEvent(new Event('resize'))
     })
@@ -218,8 +195,9 @@ describe('demand loop with the showroom canvas', () => {
     expect(baked).toBeGreaterThan(0)
     expect(baked).toBeLessThan(1200)
     const drawsAfterBake = draws
-    const frameAfterBake = frame
+    const rendersAfterBake = glRenders
     expect(drawsAfterBake).toBeGreaterThan(0)
+    expect(rendersAfterBake).toBeGreaterThan(0)
 
     for (let index = 0; index < 8; index += 1) {
       act(() => {
@@ -230,6 +208,6 @@ describe('demand loop with the showroom canvas', () => {
     expect(extra).toBe(0)
     expect(queued.size).toBe(0)
     expect(draws).toBe(drawsAfterBake)
-    if (frameAfterBake > 0) expect(frame).toBe(frameAfterBake)
+    expect(glRenders).toBe(rendersAfterBake)
   })
 })
